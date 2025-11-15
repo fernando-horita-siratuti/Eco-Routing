@@ -8,3 +8,6 @@ Libs:
 
     - Entrar no ambente:
         source venv/bin/activate
+
+    - Instalar libs:
+        pip install -r requirements.txt
