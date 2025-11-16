@@ -37,3 +37,4 @@ wheels/
 .installed.cfg
 *.egg
 elevation_cache.json
+

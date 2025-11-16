@@ -154,7 +154,7 @@ def get_elevations(coords: List[Tuple[float, float]]) -> List[Optional[float]]:
 
     return results
 
-
+# Comentario para o ChatGPT
 def get_elevation(lat: float, lon: float) -> Optional[float]:
     """Busca elevação de um ponto usando cache e requisições em lote."""
     returned = get_elevations([(lat, lon)])
