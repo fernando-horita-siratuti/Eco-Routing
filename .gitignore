@@ -36,3 +36,4 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+elevation_cache.json
