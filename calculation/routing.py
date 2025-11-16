@@ -5,8 +5,8 @@ import pandas as pd
 import networkx as nx
 import numpy as np
 from geopy.geocoders import Nominatim
+from calculation.elevation import street_steepness
 # importa a função de inclinação (reaproveita seu módulo)
-from elevation import street_steepness
 
 # ========== PARÂMETROS (ajuste conforme desejar) ==========
 BASE_L_PER_100KM = 10.0       # consumo base típico (L/100km) em velocidade moderada
@@ -76,13 +76,21 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
         G.add_node(nid, y=lat, x=lon, elevation=elevation)
 
     # adiciona arestas
+    edges_invalid = 0
     for _, r in edges_df.iterrows():
         try:
             u = int(r['source_node'])
             v = int(r['target_node'])
         except Exception:
             continue
+        
         length = _safe_float(r.get('length'), fallback=0.0)
+        
+        # Validação: ignora arestas com comprimento inválido desde o início
+        if length <= 0 or math.isnan(length) or math.isinf(length):
+            edges_invalid += 1
+            continue
+        
         name = r.get('name', "") if pd.notna(r.get('name', "")) else ""
         maxspeed = parse_maxspeed(r.get('maxspeed', REF_SPEED_KMH), default=REF_SPEED_KMH)
         oneway = str(r.get('oneway', 'False')).lower() in ('true', '1', 't', 'yes')
@@ -95,21 +103,73 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
         if not oneway:
             G.add_edge(v, u, length=length, name=name, maxspeed_kmh=maxspeed, original=True)
 
+    if edges_invalid > 0:
+        print(f"Aviso: {edges_invalid} arestas com comprimento inválido foram ignoradas durante a leitura do CSV.")
+
     _precompute_edge_costs(G)
+    
+    # Validação final do grafo
+    validate_graph_weights(G, weight_attr='eco_cost')
+    validate_graph_weights(G, weight_attr='length')
+    
     return G
+
+
+def validate_graph_weights(G: nx.DiGraph, weight_attr: str = 'eco_cost') -> bool:
+    """
+    Valida que todas as arestas têm pesos válidos e positivos.
+    Retorna True se válido, False caso contrário.
+    """
+    issues = []
+    
+    for u, v, data in G.edges(data=True):
+        weight = data.get(weight_attr, None)
+        
+        if weight is None:
+            issues.append(f"Aresta ({u}->{v}) não tem atributo '{weight_attr}'")
+        elif math.isnan(weight):
+            issues.append(f"Aresta ({u}->{v}) tem peso NaN")
+        elif math.isinf(weight):
+            issues.append(f"Aresta ({u}->{v}) tem peso infinito")
+        elif weight < 0:
+            issues.append(f"Aresta ({u}->{v}) tem peso negativo: {weight}")
+    
+    if issues:
+        print(f"\nERRO: {len(issues)} problemas encontrados nos pesos do grafo (atributo '{weight_attr}'):")
+        for issue in issues[:10]:  # Mostra apenas os primeiros 10
+            print(f"  - {issue}")
+        if len(issues) > 10:
+            print(f"  ... e mais {len(issues) - 10} problemas")
+        return False
+    
+    print(f"Grafo validado: todas as arestas têm pesos válidos para '{weight_attr}'")
+    return True
 
 
 def _precompute_edge_costs(G: nx.DiGraph) -> None:
     """Calcula fuel_liters, time_minutes e eco_cost para cada aresta do grafo.
-       Usa street_steepness para obter a grade (mais robusto que diferença/length simples)."""
+       Usa street_steepness para obter a grade (mais robusto que diferença/length simples).
+       Garante que todos os custos sejam positivos e válidos."""
     base_per_m = BASE_L_PER_100KM / 100000.0  # L por metro
     ref_speed_kmh = REF_SPEED_KMH
     ref_speed_m_per_min = ref_speed_kmh * 1000.0 / 60.0
     liters_per_min_ref = base_per_m * ref_speed_m_per_min
 
+    edges_removed = 0
     for u, v, data in list(G.edges(data=True)):
         length = float(data.get('length', 1.0))
+        
+        # Validação: remove arestas com comprimento inválido
+        if length <= 0 or math.isnan(length) or math.isinf(length):
+            G.remove_edge(u, v)
+            edges_removed += 1
+            continue
+        
         speed_kmh = float(data.get('maxspeed_kmh', REF_SPEED_KMH))
+        
+        # Validação: velocidade deve ser positiva
+        if speed_kmh <= 0 or math.isnan(speed_kmh) or math.isinf(speed_kmh):
+            speed_kmh = REF_SPEED_KMH
 
         lat_u = float(G.nodes[u].get('y', 0.0))
         lon_u = float(G.nodes[u].get('x', 0.0))
@@ -120,10 +180,15 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
         elev_v = float(G.nodes[v].get('elevation', 0.0))
 
         # usa street_steepness para obter grade (dh/dist_horizontal)
-        steep = street_steepness(lat_u, lon_u, elev_u, lat_v, lon_v, elev_v)
-        grade = steep.get("grade")
-        # se grade for None (dist_h == 0), set 0
-        slope = grade if grade is not None else 0.0
+        try:
+            steep = street_steepness(lat_u, lon_u, elev_u, lat_v, lon_v, elev_v)
+            grade = steep.get("grade")
+            # se grade for None (dist_h == 0), set 0
+            slope = grade if grade is not None and not (math.isnan(grade) or math.isinf(grade)) else 0.0
+        except Exception as e:
+            print(f"Erro ao calcular steepness para aresta ({u}->{v}): {e}. Usando slope=0.")
+            slope = 0.0
+        
         uphill = max(slope, 0.0)
 
         # fatores
@@ -138,11 +203,27 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
         time_penalty_equiv_liters = TIME_WEIGHT * time_minutes * liters_per_min_ref
 
         eco_cost = fuel_liters + time_penalty_equiv_liters
+        
+        # Validação crítica: garante que todos os custos sejam positivos e finitos
+        if math.isnan(eco_cost) or math.isinf(eco_cost) or eco_cost < 0:
+            # Se o custo for inválido, usa um valor mínimo seguro
+            eco_cost = max(0.001, length * 0.00001)  # Custo mínimo baseado no comprimento
+            print(f"Aviso: Aresta ({u}->{v}) tinha custo inválido. Corrigido para {eco_cost:.6f}")
+
+        # Validação adicional para fuel_liters e time_minutes
+        if math.isnan(fuel_liters) or math.isinf(fuel_liters) or fuel_liters < 0:
+            fuel_liters = max(0.0, base_per_m * length)
+        
+        if math.isnan(time_minutes) or math.isinf(time_minutes) or time_minutes < 0:
+            time_minutes = max(0.001, length / (ref_speed_m_per_min * 60)) if ref_speed_m_per_min > 0 else 0.001
 
         data['fuel_liters'] = fuel_liters
         data['time_minutes'] = time_minutes
         data['eco_cost'] = eco_cost
         data['slope'] = slope
+    
+    if edges_removed > 0:
+        print(f"Aviso: {edges_removed} arestas com comprimento inválido foram removidas.")
 
 
 def nearest_node_to_point(G: nx.DiGraph, lat: float, lon: float) -> int:
@@ -156,13 +237,57 @@ def nearest_node_to_point(G: nx.DiGraph, lat: float, lon: float) -> int:
     nearest_node = nodes[idx][0]
     return nearest_node
 
-
-def geocode_address(address: str, user_agent: str = "meu_app") -> Tuple[float, float, str]:
-    geolocator = Nominatim(user_agent=user_agent)
-    loc = geolocator.geocode(address)
-    if loc is None:
-        raise ValueError(f"Geocoding falhou para: {address}")
-    return loc.latitude, loc.longitude, loc.address
+def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10) -> Tuple[float, float, str]:
+    """
+    Faz geocoding de um endereço com retry e tratamento de erros melhorado.
+    
+    Args:
+        address: Endereço a ser geocodificado
+        user_agent: User agent para o Nominatim
+        timeout: Timeout em segundos
+    
+    Returns:
+        Tuple (latitude, longitude, endereço encontrado)
+    """
+    from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+    import time
+    
+    geolocator = Nominatim(user_agent=user_agent, timeout=timeout)
+    
+    # Tentativas com variações do endereço
+    variations = [
+        address,  # Tenta o endereço original primeiro
+        address.replace(",", ""),  # Remove vírgulas
+        address.split(",")[0] + ", Divinópolis, MG, Brasil",  # Só rua e cidade
+        address.split(",")[0] + ", Divinópolis, Brasil",  # Sem estado
+    ]
+    
+    last_error = None
+    for i, addr_variant in enumerate(variations):
+        try:
+            print(f"Tentando geocoding: {addr_variant}")
+            loc = geolocator.geocode(addr_variant, timeout=timeout)
+            
+            if loc is not None:
+                print(f"Geocoding bem-sucedido: {loc.address}")
+                return loc.latitude, loc.longitude, loc.address
+            
+            # Aguarda um pouco antes da próxima tentativa
+            if i < len(variations) - 1:
+                time.sleep(1)
+                
+        except (GeocoderTimedOut, GeocoderServiceError) as e:
+            last_error = e
+            print(f"Erro no geocoding (tentativa {i+1}): {e}")
+            if i < len(variations) - 1:
+                time.sleep(2)  # Aguarda mais em caso de erro
+    
+    # Se todas as tentativas falharam
+    error_msg = f"Geocoding falhou para: {address}"
+    if last_error:
+        error_msg += f" (último erro: {last_error})"
+    
+    raise ValueError(error_msg)
 
 
 def _select_best_edge_between(G: nx.DiGraph, u: int, v: int) -> Optional[Dict]:
@@ -247,26 +372,248 @@ def route_ecological(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
         'total_fuel_liters': total_fuel
     }
 
+# Calcula a menor rota sem ser a ecologica
 
-if __name__ == "__main__":
-    # exemplo de uso rápido
-    print("Carregando grafo a partir dos CSVs (certifique-se que main.py já gerou os arquivos em data/)...")
+# Adicione após a função route_ecological (após linha 248)
+
+def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'length') -> Tuple[List[int], float]:
+    """
+    Implementação manual do algoritmo de Dijkstra.
+    Retorna (caminho, custo_total).
+    
+    Args:
+        G: Grafo direcionado
+        start: Nó de origem
+        target: Nó de destino
+        weight: Atributo da aresta a ser usado como peso ('length', 'eco_cost', etc.)
+    """
+    import heapq
+    
+    # Inicialização
+    dist = {node: float('inf') for node in G.nodes()}
+    dist[start] = 0.0
+    prev = {node: None for node in G.nodes()}
+    visited = set()
+    
+    # Fila de prioridade: (distância, nó)
+    pq = [(0.0, start)]
+    
+    while pq:
+        current_dist, u = heapq.heappop(pq)
+        
+        if u in visited:
+            continue
+            
+        visited.add(u)
+        
+        # Se chegamos no destino, podemos parar
+        if u == target:
+            break
+        
+        # Explora vizinhos
+        for v in G.successors(u):
+            if v in visited:
+                continue
+                
+            edge_data = G[u][v]
+            edge_weight = edge_data.get(weight, float('inf'))
+            
+            if edge_weight < 0:
+                raise ValueError(f"Peso negativo encontrado: {weight}={edge_weight}")
+            
+            alt = current_dist + edge_weight
+            
+            if alt < dist[v]:
+                dist[v] = alt
+                prev[v] = u
+                heapq.heappush(pq, (alt, v))
+    
+    # Reconstrói o caminho
+    if dist[target] == float('inf'):
+        raise nx.NetworkXNoPath(f"Não há caminho de {start} para {target}")
+    
+    path = []
+    u = target
+    while u is not None:
+        path.append(u)
+        u = prev[u]
+    path.reverse()
+    
+    return path, dist[target]
+
+
+def _process_path(G: nx.DiGraph, path: List[int]) -> Dict:
+    """Processa um caminho e calcula estatísticas (distância, combustível, tempo)."""
+    total_length = 0.0
+    total_fuel = 0.0
+    total_time_min = 0.0
+    edges = []
+    street_segments = []
+    
+    for i in range(len(path) - 1):
+        u = path[i]
+        v = path[i + 1]
+        data = _select_best_edge_between(G, u, v)
+        if data is None:
+            continue
+        length = data.get('length', 0.0)
+        fuel = data.get('fuel_liters', 0.0)
+        time_min = data.get('time_minutes', 0.0)
+        name = data.get('name') if data.get('name') else "unnamed"
+        total_length += length
+        total_fuel += fuel
+        total_time_min += time_min
+        edges.append((u, v, data))
+        street_segments.append((name, length, fuel, time_min))
+    
+    street_segments_compressed = compress_street_segments(street_segments)
+    
+    return {
+        'path_nodes': path,
+        'edges': edges,
+        'street_segments': street_segments_compressed,
+        'total_length_m': total_length,
+        'total_time_min': total_time_min,
+        'total_fuel_liters': total_fuel
+    }
+
+
+def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_manual_dijkstra: bool = False) -> Dict:
+    """
+    Calcula a rota com menor distância (usa 'length' como peso).
+    
+    Args:
+        G: Grafo
+        start_addr: Endereço de origem
+        dest_addr: Endereço de destino
+        use_manual_dijkstra: Se True, usa implementação manual do Dijkstra
+    """
+    start_lat, start_lon, _ = geocode_address(start_addr)
+    dest_lat, dest_lon, _ = geocode_address(dest_addr)
+    
+    start_node = nearest_node_to_point(G, start_lat, start_lon)
+    end_node = nearest_node_to_point(G, dest_lat, dest_lon)
+    
+    try:
+        if use_manual_dijkstra:
+            path, _ = dijkstra_manual(G, start_node, end_node, weight='length')
+        else:
+            path = nx.shortest_path(G, source=start_node, target=end_node, weight='length', method='dijkstra')
+    except nx.NetworkXNoPath:
+        raise RuntimeError("Não há caminho entre os nós selecionados.")
+    
+    result = _process_path(G, path)
+    result['start_node'] = start_node
+    result['end_node'] = end_node
+    
+    return result
+
+
+def route_ecological_manual_dijkstra(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
+    """
+    Calcula rota ecológica usando implementação manual do Dijkstra.
+    """
+    start_lat, start_lon, _ = geocode_address(start_addr)
+    dest_lat, dest_lon, _ = geocode_address(dest_addr)
+    
+    start_node = nearest_node_to_point(G, start_lat, start_lon)
+    end_node = nearest_node_to_point(G, dest_lat, dest_lon)
+    
+    try:
+        path, _ = dijkstra_manual(G, start_node, end_node, weight='eco_cost')
+    except nx.NetworkXNoPath:
+        raise RuntimeError("Não há caminho entre os nós selecionados.")
+    
+    result = _process_path(G, path)
+    result['start_node'] = start_node
+    result['end_node'] = end_node
+    
+    return result
+
+
+def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
+    """
+    Compara rota ecológica vs rota mais curta.
+    Retorna dicionário com ambas as rotas e estatísticas comparativas.
+    """
+    print("Calculando rota ecológica...")
+    route_eco = route_ecological(G, start_addr, dest_addr)
+    
+    print("Calculando rota mais curta (menor distância)...")
+    route_short = route_shortest_distance(G, start_addr, dest_addr)
+    
+    return {
+        'ecological': route_eco,
+        'shortest': route_short,
+        'comparison': {
+            'length_diff_m': route_eco['total_length_m'] - route_short['total_length_m'],
+            'length_diff_pct': ((route_eco['total_length_m'] - route_short['total_length_m']) / route_short['total_length_m']) * 100 if route_short['total_length_m'] > 0 else 0,
+            'fuel_diff_liters': route_eco['total_fuel_liters'] - route_short['total_fuel_liters'],
+            'fuel_diff_pct': ((route_eco['total_fuel_liters'] - route_short['total_fuel_liters']) / route_short['total_fuel_liters']) * 100 if route_short['total_fuel_liters'] > 0 else 0,
+            'time_diff_min': route_eco['total_time_min'] - route_short['total_time_min'],
+            'time_diff_pct': ((route_eco['total_time_min'] - route_short['total_time_min']) / route_short['total_time_min']) * 100 if route_short['total_time_min'] > 0 else 0,
+        }
+    }
+
+
+# Fim do dikistra normal
+# Substitua a função calculate_route() (linhas 251-272) por:
+
+def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
+    """
+    Calcula rotas e compara se solicitado.
+    
+    Args:
+        compare: Se True, compara rota ecológica vs rota mais curta
+        use_manual_dijkstra: Se True, usa implementação manual do Dijkstra para rota mais curta
+    """
+    print("Carregando grafo a partir dos CSVs...")
     G = build_graph_from_csv()
     print(f"Grafo com {G.number_of_nodes()} nós e {G.number_of_edges()} arestas.\n")
-
-    # coloque aqui os endereços de início/fim que deseja testar
-    start_address = "Rua Padre Eustáquio, 710, Divinópolis, MG, Brasil"
-    dest_address = "Rua Álvares de Azevedo, 400, Divinópolis, MG, Brasil"
-
-    print("Calculando rota ecológica (pode demorar alguns segundos - depende do geocoding)...")
-    result = route_ecological(G, start_address, dest_address)
-
-    print("\n--- Resumo da rota ---")
-    print(f"Start node: {result['start_node']}, End node: {result['end_node']}")
-    print(f"Distância total: {result['total_length_m']:.1f} m")
-    print(f"Tempo estimado: {result['total_time_min']:.1f} min")
-    print(f"Consumo estimado: {result['total_fuel_liters']:.3f} L")
-
-    print("\nTrechos por rua (agregado):")
-    for idx, (name, length, fuel, time_min) in enumerate(result['street_segments'], start=1):
-        print(f"{idx}. {name or 'unnamed'} — {length:.0f} m — {time_min:.1f} min — {fuel:.3f} L")
+    
+    start_address = "Rua Padre Eustáquio, 716, Divinópolis, MG, Brasil"
+    dest_address = "Rua Rio de Janeiro, 2220, Divinópolis, MG, Brasil"
+    
+    if compare:
+        print("Comparando rotas (ecológica vs mais curta)...")
+        results = compare_routes(G, start_address, dest_address)
+        
+        print("\n" + "="*60)
+        print("ROTA ECOLÓGICA")
+        print("="*60)
+        eco = results['ecological']
+        print(f"Distância total: {eco['total_length_m']:.1f} m")
+        print(f"Tempo estimado: {eco['total_time_min']:.1f} min")
+        print(f"Consumo estimado: {eco['total_fuel_liters']:.3f} L")
+        
+        print("\n" + "="*60)
+        print("ROTA MAIS CURTA (menor distância)")
+        print("="*60)
+        short = results['shortest']
+        print(f"Distância total: {short['total_length_m']:.1f} m")
+        print(f"Tempo estimado: {short['total_time_min']:.1f} min")
+        print(f"Consumo estimado: {short['total_fuel_liters']:.3f} L")
+        
+        print("\n" + "="*60)
+        print("COMPARAÇÃO")
+        print("="*60)
+        comp = results['comparison']
+        print(f"Diferença de distância: {comp['length_diff_m']:+.1f} m ({comp['length_diff_pct']:+.1f}%)")
+        print(f"Diferença de combustível: {comp['fuel_diff_liters']:+.3f} L ({comp['fuel_diff_pct']:+.1f}%)")
+        print(f"Diferença de tempo: {comp['time_diff_min']:+.1f} min ({comp['time_diff_pct']:+.1f}%)")
+        
+        return results
+    else:
+        print("Calculando rota ecológica...")
+        result = route_ecological(G, start_address, dest_address)
+        
+        print("\n--- Resumo da rota ecológica ---")
+        print(f"Distância total: {result['total_length_m']:.1f} m")
+        print(f"Tempo estimado: {result['total_time_min']:.1f} min")
+        print(f"Consumo estimado: {result['total_fuel_liters']:.3f} L")
+        
+        print("\nTrechos por rua (agregado):")
+        for idx, (name, length, fuel, time_min) in enumerate(result['street_segments'], start=1):
+            print(f"{idx}. {name or 'unnamed'} — {length:.0f} m — {time_min:.1f} min — {fuel:.3f} L")
+        
+        return result
