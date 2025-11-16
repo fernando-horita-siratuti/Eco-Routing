@@ -11,3 +11,6 @@ Libs:
 
     - Instalar libs:
         pip install -r requirements.txt
+    
+    - Executar o progrma:
+        python -m main.main 

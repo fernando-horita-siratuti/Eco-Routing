@@ -30,7 +30,7 @@ def _safe_float(val: object, fallback: float = 0.0) -> float:
     except Exception:
         return fallback
 
-
+# é a mesma funcao que esta em horizontal_displacement_m da elevation.py
 def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     R = 6371000.0
     phi1 = math.radians(lat1)
