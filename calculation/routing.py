@@ -142,7 +142,6 @@ def validate_graph_weights(G: nx.DiGraph, weight_attr: str = 'eco_cost') -> bool
             print(f"  ... e mais {len(issues) - 10} problemas")
         return False
     
-    print(f"Grafo validado: todas as arestas têm pesos válidos para '{weight_attr}'")
     return True
 
 
@@ -265,11 +264,9 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
     last_error = None
     for i, addr_variant in enumerate(variations):
         try:
-            print(f"Tentando geocoding: {addr_variant}")
             loc = geolocator.geocode(addr_variant, timeout=timeout)
             
             if loc is not None:
-                print(f"Geocoding bem-sucedido: {loc.address}")
                 return loc.latitude, loc.longitude, loc.address
             
             # Aguarda um pouco antes da próxima tentativa
@@ -278,7 +275,6 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
                 
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             last_error = e
-            print(f"Erro no geocoding (tentativa {i+1}): {e}")
             if i < len(variations) - 1:
                 time.sleep(2)  # Aguarda mais em caso de erro
     
@@ -327,16 +323,20 @@ def compress_street_segments(segments: List[Tuple[str, float, float, float]]) ->
 
 
 def route_ecological(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
+    import time as time_module
     start_lat, start_lon, _ = geocode_address(start_addr)
     dest_lat, dest_lon, _ = geocode_address(dest_addr)
 
     start_node = nearest_node_to_point(G, start_lat, start_lon)
     end_node = nearest_node_to_point(G, dest_lat, dest_lon)
 
+    # Mede tempo de execução do algoritmo
+    start_time = time_module.perf_counter()
     try:
         path = nx.shortest_path(G, source=start_node, target=end_node, weight='eco_cost', method='dijkstra')
     except nx.NetworkXNoPath:
         raise RuntimeError("Não há caminho entre os nós selecionados.")
+    execution_time = time_module.perf_counter() - start_time
 
     total_length = 0.0
     total_fuel = 0.0
@@ -369,7 +369,8 @@ def route_ecological(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
         'street_segments': street_segments_compressed,
         'total_length_m': total_length,
         'total_time_min': total_time_min,
-        'total_fuel_liters': total_fuel
+        'total_fuel_liters': total_fuel,
+        'execution_time_seconds': execution_time
     }
 
 # Calcula a menor rota sem ser a ecologica
@@ -488,12 +489,15 @@ def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_
         dest_addr: Endereço de destino
         use_manual_dijkstra: Se True, usa implementação manual do Dijkstra
     """
+    import time as time_module
     start_lat, start_lon, _ = geocode_address(start_addr)
     dest_lat, dest_lon, _ = geocode_address(dest_addr)
     
     start_node = nearest_node_to_point(G, start_lat, start_lon)
     end_node = nearest_node_to_point(G, dest_lat, dest_lon)
     
+    # Mede tempo de execução do algoritmo
+    start_time = time_module.perf_counter()
     try:
         if use_manual_dijkstra:
             path, _ = dijkstra_manual(G, start_node, end_node, weight='length')
@@ -501,10 +505,12 @@ def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_
             path = nx.shortest_path(G, source=start_node, target=end_node, weight='length', method='dijkstra')
     except nx.NetworkXNoPath:
         raise RuntimeError("Não há caminho entre os nós selecionados.")
+    execution_time = time_module.perf_counter() - start_time
     
     result = _process_path(G, path)
     result['start_node'] = start_node
     result['end_node'] = end_node
+    result['execution_time_seconds'] = execution_time
     
     return result
 
@@ -536,11 +542,17 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
     Compara rota ecológica vs rota mais curta.
     Retorna dicionário com ambas as rotas e estatísticas comparativas.
     """
-    print("Calculando rota ecológica...")
+    import time as time_module
+    # Mede tempo total do algoritmo Dijkstra
+    dijkstra_start_time = time_module.perf_counter()
+    
+    #print("Calculando rota ecológica...")
     route_eco = route_ecological(G, start_addr, dest_addr)
     
-    print("Calculando rota mais curta (menor distância)...")
+    #print("Calculando rota mais curta (menor distância)...")
     route_short = route_shortest_distance(G, start_addr, dest_addr)
+    
+    dijkstra_total_time = time_module.perf_counter() - dijkstra_start_time
     
     return {
         'ecological': route_eco,
@@ -552,7 +564,8 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
             'fuel_diff_pct': ((route_eco['total_fuel_liters'] - route_short['total_fuel_liters']) / route_short['total_fuel_liters']) * 100 if route_short['total_fuel_liters'] > 0 else 0,
             'time_diff_min': route_eco['total_time_min'] - route_short['total_time_min'],
             'time_diff_pct': ((route_eco['total_time_min'] - route_short['total_time_min']) / route_short['total_time_min']) * 100 if route_short['total_time_min'] > 0 else 0,
-        }
+        },
+        'total_execution_time_seconds': dijkstra_total_time
     }
 
 
@@ -567,53 +580,25 @@ def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
         compare: Se True, compara rota ecológica vs rota mais curta
         use_manual_dijkstra: Se True, usa implementação manual do Dijkstra para rota mais curta
     """
-    print("Carregando grafo a partir dos CSVs...")
+    #print("Carregando grafo a partir dos CSVs...")
     G = build_graph_from_csv()
-    print(f"Grafo com {G.number_of_nodes()} nós e {G.number_of_edges()} arestas.\n")
     
     start_address = "Rua Padre Eustáquio, 716, Divinópolis, MG, Brasil"
     dest_address = "Rua Rio de Janeiro, 2220, Divinópolis, MG, Brasil"
     
     if compare:
-        print("Comparando rotas (ecológica vs mais curta)...")
+        #print("Comparando rotas (ecológica vs mais curta)...")
         results = compare_routes(G, start_address, dest_address)
-        
-        print("\n" + "="*60)
-        print("ROTA ECOLÓGICA")
-        print("="*60)
-        eco = results['ecological']
-        print(f"Distância total: {eco['total_length_m']:.1f} m")
-        print(f"Tempo estimado: {eco['total_time_min']:.1f} min")
-        print(f"Consumo estimado: {eco['total_fuel_liters']:.3f} L")
-        
-        print("\n" + "="*60)
-        print("ROTA MAIS CURTA (menor distância)")
-        print("="*60)
-        short = results['shortest']
-        print(f"Distância total: {short['total_length_m']:.1f} m")
-        print(f"Tempo estimado: {short['total_time_min']:.1f} min")
-        print(f"Consumo estimado: {short['total_fuel_liters']:.3f} L")
-        
-        print("\n" + "="*60)
-        print("COMPARAÇÃO")
-        print("="*60)
-        comp = results['comparison']
-        print(f"Diferença de distância: {comp['length_diff_m']:+.1f} m ({comp['length_diff_pct']:+.1f}%)")
-        print(f"Diferença de combustível: {comp['fuel_diff_liters']:+.3f} L ({comp['fuel_diff_pct']:+.1f}%)")
-        print(f"Diferença de tempo: {comp['time_diff_min']:+.1f} min ({comp['time_diff_pct']:+.1f}%)")
-        
         return results
     else:
-        print("Calculando rota ecológica...")
+        #print("Calculando rota ecológica...")
         result = route_ecological(G, start_address, dest_address)
         
-        print("\n--- Resumo da rota ecológica ---")
-        print(f"Distância total: {result['total_length_m']:.1f} m")
-        print(f"Tempo estimado: {result['total_time_min']:.1f} min")
-        print(f"Consumo estimado: {result['total_fuel_liters']:.3f} L")
-        
-        print("\nTrechos por rua (agregado):")
-        for idx, (name, length, fuel, time_min) in enumerate(result['street_segments'], start=1):
-            print(f"{idx}. {name or 'unnamed'} — {length:.0f} m — {time_min:.1f} min — {fuel:.3f} L")
-        
         return result
+
+def calculate_route_dijkstra(start_addr: str, dest_addr: str):
+    G = build_graph_from_csv()
+    result_short = route_shortest_distance(G, start_addr, dest_addr)
+    result_eco = route_ecological_manual_dijkstra(G, start_addr, dest_addr)
+    return result_short, result_eco
+

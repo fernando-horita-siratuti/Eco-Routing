@@ -45,7 +45,6 @@ def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
     Retorna (nodes_csv_path, edges_csv_path).
     """
     G = ox.graph_from_place(place, network_type='drive')
-    print(f"Grafo: {len(G.nodes)} nós, {len(G.edges)} arestas")
 
     nodes_data: List[Dict[str, object]] = []
     coords_to_fetch: List[Tuple[float, float]] = []
@@ -77,7 +76,7 @@ def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
         nodes_data.append(nodes_entry)
 
     if coords_to_fetch:
-        print(f"Consultando elevação para {len(coord_to_indexes)} coordenadas faltantes...")
+        #print(f"Consultando elevação para {len(coord_to_indexes)} coordenadas faltantes...")
         with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as executor:
             futures = {
                 executor.submit(get_elevations, batch): batch
@@ -95,7 +94,6 @@ def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
     df_nodes = pd.DataFrame(nodes_data)
     nodes_csv = OUTPUT_DIR / "divinopolis_nodes.csv"
     df_nodes.to_csv(nodes_csv, index=False)
-    print(f"Dados dos {len(df_nodes)} nós salvos em '{nodes_csv.name}'")
 
     edges_data = []
     for edge in G.edges(data=True):
@@ -113,6 +111,5 @@ def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
     df_edges = pd.DataFrame(edges_data)
     edges_csv = OUTPUT_DIR / "divinopolis_edges.csv"
     df_edges.to_csv(edges_csv, index=False)
-    print(f"Dados das {len(df_edges)} arestas salvos em '{edges_csv.name}'")
 
     return nodes_csv, edges_csv
