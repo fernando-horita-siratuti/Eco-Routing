@@ -560,14 +560,13 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
         'comparison': {
             'length_diff_m': route_eco['total_length_m'] - route_short['total_length_m'],
             'length_diff_pct': ((route_eco['total_length_m'] - route_short['total_length_m']) / route_short['total_length_m']) * 100 if route_short['total_length_m'] > 0 else 0,
-            'fuel_diff_liters': route_eco['total_fuel_liters'] - route_short['total_fuel_liters'],
+            'fuel_diff_liters': route_short['total_fuel_liters'] - route_eco['total_fuel_liters'],
             'fuel_diff_pct': ((route_eco['total_fuel_liters'] - route_short['total_fuel_liters']) / route_short['total_fuel_liters']) * 100 if route_short['total_fuel_liters'] > 0 else 0,
             'time_diff_min': route_eco['total_time_min'] - route_short['total_time_min'],
             'time_diff_pct': ((route_eco['total_time_min'] - route_short['total_time_min']) / route_short['total_time_min']) * 100 if route_short['total_time_min'] > 0 else 0,
         },
         'total_execution_time_seconds': dijkstra_total_time
     }
-
 
 # Fim do dikistra normal
 # Substitua a função calculate_route() (linhas 251-272) por:

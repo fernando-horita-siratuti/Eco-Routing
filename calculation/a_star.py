@@ -3,7 +3,7 @@ import math
 import networkx as nx
 
 # Import helpers and params from routing (ajustado para routing.py ao invés de dijkstra.py)
-from calculation.routing import (
+from truck_delivery_optimization.calculation.dijkstra import (
     haversine,
     nearest_node_to_point,
     _select_best_edge_between,
@@ -135,7 +135,7 @@ def _make_astar_heuristic_eco(G: nx.DiGraph):
     
     This heuristic never overestimates (admissible) and therefore preserves A* optimality.
     """
-    from calculation.routing import BASE_L_PER_100KM, REF_SPEED_KMH, TIME_WEIGHT
+    from truck_delivery_optimization.calculation.dijkstra import BASE_L_PER_100KM, REF_SPEED_KMH, TIME_WEIGHT
     
     base_per_m = BASE_L_PER_100KM / 100000.0  # liters per meter
     

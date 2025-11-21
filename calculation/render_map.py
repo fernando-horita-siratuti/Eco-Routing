@@ -5,7 +5,7 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 import re
-from .routing import build_graph_from_csv, calculate_route_dijkstra
+from .dijkstra import build_graph_from_csv, calculate_route_dijkstra
 from .a_star import calculate_astar_routes
 
 def reverse_geocode(lat: float, lon: float, user_agent: str = "meu_app", timeout: int = 5) -> str:
@@ -264,14 +264,18 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     
     # Cria HTML combinado
     # Calcula comparação localmente
-    comp = {
+    comp_dijkstra = {
         'length_diff_m': result_eco['total_length_m'] - result_short['total_length_m'],
         'length_diff_pct': ((result_eco['total_length_m'] - result_short['total_length_m']) / result_short['total_length_m']) * 100 if result_short['total_length_m'] > 0 else 0,
-        'fuel_diff_liters': result_eco['total_fuel_liters'] - result_short['total_fuel_liters'],
+        'fuel_diff_liters': result_short['total_fuel_liters'] - result_eco['total_fuel_liters'],
         'fuel_diff_pct': ((result_eco['total_fuel_liters'] - result_short['total_fuel_liters']) / result_short['total_fuel_liters']) * 100 if result_short['total_fuel_liters'] > 0 else 0,
         'time_diff_min': result_eco['total_time_min'] - result_short['total_time_min'],
         'time_diff_pct': ((result_eco['total_time_min'] - result_short['total_time_min']) / result_short['total_time_min']) * 100 if result_short['total_time_min'] > 0 else 0,
     }
+
+    fuel_diff_dijkstra = comp_dijkstra['fuel_diff_liters']
+    length_diff_dijkstra = comp_dijkstra['length_diff_m']
+    time_diff_dijkstra = abs(comp_dijkstra['time_diff_min'])
     
     # Prepara o conteúdo dos mapas
     eco_map_content = eco_map_match.group(1) if eco_map_match else ""
@@ -660,20 +664,20 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
                 <div class="analysis-box eco">
                     <h3>Rota Ecológica</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor consumo de combustível ({comp['fuel_diff_liters']:+.3f}L de diferença)</li>
-                        <li><span class="advantage">✓ Vantagem:</span> {'Menor tempo de viagem' if comp['time_diff_min'] < 0 else 'Tempo similar'}</li>
+                        <li><span class="advantage">✓ Vantagem:</span> Menor consumo de combustível ({fuel_diff_dijkstra:+.3f}L de diferença)</li>
+                        <li><span class="advantage">✓ Vantagem:</span> {'Menor tempo de viagem' if comp_dijkstra['time_diff_min'] < 0 else 'Tempo similar'}</li>
                         <li><span class="advantage">✓ Vantagem:</span> Mais sustentável e econômica a longo prazo</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Distância ligeiramente maior' if comp['length_diff_m'] > 0 else 'Distância similar'} ({comp['length_diff_m']:+.1f}m)</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Distância ligeiramente maior' if comp_dijkstra['length_diff_m'] > 0 else 'Distância similar'} ({length_diff_dijkstra:+.1f}m)</li>
                     </ul>
                 </div>
                 
                 <div class="analysis-box short">
                     <h3>Rota Mais Curta</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor distância percorrida ({comp['length_diff_m']:+.1f}m de diferença)</li>
+                        <li><span class="advantage">✓ Vantagem:</span> Menor distância percorrida ({length_diff_dijkstra:+.1f}m de diferença)</li>
                         <li><span class="advantage">✓ Vantagem:</span> Caminho mais direto entre origem e destino</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> Maior consumo de combustível ({comp['fuel_diff_liters']:+.3f}L a mais)</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Tempo de viagem maior' if comp['time_diff_min'] > 0 else 'Tempo similar'} ({comp['time_diff_min']:+.1f} min)</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> Maior consumo de combustível ({fuel_diff_dijkstra:+.3f}L a mais)</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Tempo de viagem maior' if comp_dijkstra['time_diff_min'] > 0 else 'Tempo similar'} ({time_diff_dijkstra:+.1f} min)</li>
                     </ul>
                 </div>
             </div>
@@ -817,38 +821,38 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     comparison_astar_scripts_clean = [s.replace(comparison_astar_map_id, 'map_comparison_astar_leaflet') for s in comparison_astar_scripts]
     
     # Comparações
-    comp_eco = {
-        'length_diff_m': result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m'],
-        'length_diff_pct': ((result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m']) / result_eco_dijkstra['total_length_m']) * 100 if result_eco_dijkstra['total_length_m'] > 0 else 0,
-        'fuel_diff_liters': result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters'],
-        'fuel_diff_pct': ((result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters']) / result_eco_dijkstra['total_fuel_liters']) * 100 if result_eco_dijkstra['total_fuel_liters'] > 0 else 0,
-        'time_diff_min': result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min'],
-        'time_diff_pct': ((result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min']) / result_eco_dijkstra['total_time_min']) * 100 if result_eco_dijkstra['total_time_min'] > 0 else 0,
-    }
+    # comp_eco = {
+    #     'length_diff_m': result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m'],
+    #     'length_diff_pct': ((result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m']) / result_eco_dijkstra['total_length_m']) * 100 if result_eco_dijkstra['total_length_m'] > 0 else 0,
+    #     'fuel_diff_liters': result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters'],
+    #     'fuel_diff_pct': ((result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters']) / result_eco_dijkstra['total_fuel_liters']) * 100 if result_eco_dijkstra['total_fuel_liters'] > 0 else 0,
+    #     'time_diff_min': result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min'],
+    #     'time_diff_pct': ((result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min']) / result_eco_dijkstra['total_time_min']) * 100 if result_eco_dijkstra['total_time_min'] > 0 else 0,
+    # }
     
-    comp_short = {
-        'length_diff_m': result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m'],
-        'length_diff_pct': ((result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m']) / result_short_dijkstra['total_length_m']) * 100 if result_short_dijkstra['total_length_m'] > 0 else 0,
-        'fuel_diff_liters': result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters'],
-        'fuel_diff_pct': ((result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters']) / result_short_dijkstra['total_fuel_liters']) * 100 if result_short_dijkstra['total_fuel_liters'] > 0 else 0,
-        'time_diff_min': result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min'],
-        'time_diff_pct': ((result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min']) / result_short_dijkstra['total_time_min']) * 100 if result_short_dijkstra['total_time_min'] > 0 else 0,
-    }
+    # comp_short = {
+    #     'length_diff_m': result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m'],
+    #     'length_diff_pct': ((result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m']) / result_short_dijkstra['total_length_m']) * 100 if result_short_dijkstra['total_length_m'] > 0 else 0,
+    #     'fuel_diff_liters': result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters'],
+    #     'fuel_diff_pct': ((result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters']) / result_short_dijkstra['total_fuel_liters']) * 100 if result_short_dijkstra['total_fuel_liters'] > 0 else 0,
+    #     'time_diff_min': result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min'],
+    #     'time_diff_pct': ((result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min']) / result_short_dijkstra['total_time_min']) * 100 if result_short_dijkstra['total_time_min'] > 0 else 0,
+    # }
     
     # Comparação entre as rotas A* (ecológica vs mais curta) - mesma estrutura do Dijkstra
     comp_astar = {
         'length_diff_m': result_eco_astar['total_length_m'] - result_short_astar['total_length_m'],
         'length_diff_pct': ((result_eco_astar['total_length_m'] - result_short_astar['total_length_m']) / result_short_astar['total_length_m']) * 100 if result_short_astar['total_length_m'] > 0 else 0,
-        'fuel_diff_liters': result_eco_astar['total_fuel_liters'] - result_short_astar['total_fuel_liters'],
+        'fuel_diff_liters': result_short_astar['total_fuel_liters'] - result_eco_astar['total_fuel_liters'],
         'fuel_diff_pct': ((result_eco_astar['total_fuel_liters'] - result_short_astar['total_fuel_liters']) / result_short_astar['total_fuel_liters']) * 100 if result_short_astar['total_fuel_liters'] > 0 else 0,
         'time_diff_min': result_eco_astar['total_time_min'] - result_short_astar['total_time_min'],
         'time_diff_pct': ((result_eco_astar['total_time_min'] - result_short_astar['total_time_min']) / result_short_astar['total_time_min']) * 100 if result_short_astar['total_time_min'] > 0 else 0,
     }
     
     # Ajusta os textos para mostrar valores absolutos quando necessário
-    fuel_diff_abs_astar = abs(comp_astar['fuel_diff_liters'])
-    length_diff_abs_astar = abs(comp_astar['length_diff_m'])
-    time_diff_abs_astar = abs(comp_astar['time_diff_min'])
+    fuel_diff_astar = comp_astar['fuel_diff_liters']
+    length_diff_astar = comp_astar['length_diff_m']
+    time_diff_astar = abs(comp_astar['time_diff_min'])
     
     # Adiciona seção A* ao HTML do Dijkstra
     astar_section = f'''
@@ -944,20 +948,20 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                         <div class="analysis-box eco">
                     <h3>Rota Ecológica A*</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor consumo de combustível ({fuel_diff_abs_astar:.3f}L de diferença)</li>
+                        <li><span class="advantage">✓ Vantagem:</span> Menor consumo de combustível ({fuel_diff_astar:+.3f}L de diferença)</li>
                         <li><span class="advantage">✓ Vantagem:</span> {'Menor tempo de viagem' if comp_astar['time_diff_min'] < 0 else 'Tempo similar'}</li>
                         <li><span class="advantage">✓ Vantagem:</span> Mais sustentável e econômica a longo prazo</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Distância ligeiramente maior' if comp_astar['length_diff_m'] > 0 else 'Distância similar'} ({length_diff_abs_astar:.1f}m)</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Distância ligeiramente maior' if comp_astar['length_diff_m'] > 0 else 'Distância similar'} ({length_diff_astar:+.1f}m)</li>
                     </ul>
                 </div>
                 
                 <div class="analysis-box short">
                     <h3>Rota Mais Curta A*</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor distância percorrida ({length_diff_abs_astar:.1f}m de diferença)</li>
+                        <li><span class="advantage">✓ Vantagem:</span> Menor distância percorrida ({length_diff_astar:+.1f}m de diferença)</li>
                         <li><span class="advantage">✓ Vantagem:</span> Caminho mais direto entre origem e destino</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> Maior consumo de combustível ({fuel_diff_abs_astar:.3f}L a mais)</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Tempo de viagem maior' if comp_astar['time_diff_min'] > 0 else 'Tempo similar'} ({time_diff_abs_astar:.1f} min)</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> Maior consumo de combustível ({fuel_diff_astar:+.3f}L a mais)</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Tempo de viagem maior' if comp_astar['time_diff_min'] < 0 else 'Tempo similar'} ({time_diff_astar:+.1f} min)</li>
                     </ul>
                         </div>
                     </div>
