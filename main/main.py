@@ -1,5 +1,5 @@
 from calculation.data_processing import gerar_csvs
-from truck_delivery_optimization.calculation.dijkstra import calculate_route
+from calculation.dijkstra import calculate_route
 from pathlib import Path
 from calculation.render_map import render_all_routes_combined
 import warnings
