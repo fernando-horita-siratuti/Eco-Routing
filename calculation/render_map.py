@@ -6,7 +6,7 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 import re
 from .routing import build_graph_from_csv, calculate_route_dijkstra
-from .astar import calculate_astar_routes
+from .a_star import calculate_astar_routes
 
 def reverse_geocode(lat: float, lon: float, user_agent: str = "meu_app", timeout: int = 5) -> str:
     """
