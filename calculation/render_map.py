@@ -5,8 +5,8 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 import re
-from typing import Tuple
-from .routing import build_graph_from_csv, route_ecological, route_shortest_distance, compare_routes
+from .routing import build_graph_from_csv, calculate_route_dijkstra
+from .astar import calculate_astar_routes
 
 def reverse_geocode(lat: float, lon: float, user_agent: str = "meu_app", timeout: int = 5) -> str:
     """
@@ -71,14 +71,11 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     Returns:
         Path do arquivo HTML gerado
     """
+    # Calcula ambas as rotas
+    result_short, result_eco = calculate_route_dijkstra(start_addr, dest_addr)
+    
+    # Carrega grafo para extrair coordenadas
     G = build_graph_from_csv()
-    
-    # Calcula ambas as rotas e comparação
-    print("Calculando rotas e comparação...")
-    comparison = compare_routes(G, start_addr, dest_addr)
-    
-    result_eco = comparison['ecological']
-    result_short = comparison['shortest']
     
     # Extrai coordenadas das rotas
     coords_eco = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_eco['path_nodes']]
@@ -88,20 +85,18 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         raise ValueError("Uma das rotas está vazia, não há coordenadas para desenhar.")
     
     # Obtém pontos-chave para reverse geocoding (apenas início e fim)
-    print("Obtendo endereços dos pontos principais...")
+    #print("Obtendo endereços dos pontos principais...")
     key_points_eco = get_key_points(G, result_eco['path_nodes'])
     key_points_short = get_key_points(G, result_short['path_nodes'])
     
     # Faz reverse geocoding para os pontos-chave (apenas início e fim)
     addresses_eco = {}
     for node_id, lat, lon in key_points_eco:
-        print(f"  Geocodificando ponto ecológico {node_id}...")
         addresses_eco[node_id] = reverse_geocode(lat, lon)
         time.sleep(1)  # Rate limiting para Nominatim
     
     addresses_short = {}
     for node_id, lat, lon in key_points_short:
-        print(f"  Geocodificando ponto mais curto {node_id}...")
         addresses_short[node_id] = reverse_geocode(lat, lon)
         time.sleep(1)  # Rate limiting para Nominatim
     
@@ -268,7 +263,15 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     head_content = head_match.group(1) if head_match else ""
     
     # Cria HTML combinado
-    comp = comparison['comparison']
+    # Calcula comparação localmente
+    comp = {
+        'length_diff_m': result_eco['total_length_m'] - result_short['total_length_m'],
+        'length_diff_pct': ((result_eco['total_length_m'] - result_short['total_length_m']) / result_short['total_length_m']) * 100 if result_short['total_length_m'] > 0 else 0,
+        'fuel_diff_liters': result_eco['total_fuel_liters'] - result_short['total_fuel_liters'],
+        'fuel_diff_pct': ((result_eco['total_fuel_liters'] - result_short['total_fuel_liters']) / result_short['total_fuel_liters']) * 100 if result_short['total_fuel_liters'] > 0 else 0,
+        'time_diff_min': result_eco['total_time_min'] - result_short['total_time_min'],
+        'time_diff_pct': ((result_eco['total_time_min'] - result_short['total_time_min']) / result_short['total_time_min']) * 100 if result_short['total_time_min'] > 0 else 0,
+    }
     
     # Prepara o conteúdo dos mapas
     eco_map_content = eco_map_match.group(1) if eco_map_match else ""
@@ -297,6 +300,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Rota Ecológica vs Rota Mais Curta</title>
     {head_content}
     <style>
         * {{
@@ -560,7 +564,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
 </head>
 <body>
     <div class="header">
-        <h1>ROTAS A PARTIR DO DIJKSTRA</h1>
+        <h1>DIJKSTRA</h1>
     </div>
     
     <div class="main-content">
@@ -687,44 +691,371 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     with open(out, 'w', encoding='utf-8') as f:
         f.write(combined_html)
     
-    print(f"\nMapa comparativo salvo em: {out}")
-    print(f"\nRota Ecológica: {result_eco['total_length_m']:.1f}m, {result_eco['total_fuel_liters']:.3f}L, {result_eco['total_time_min']:.1f}min")
-    print(f"Rota Mais Curta: {result_short['total_length_m']:.1f}m, {result_short['total_fuel_liters']:.3f}L, {result_short['total_time_min']:.1f}min")
-    print(f"\nComparação:")
-    print(f"  Diferença de distância: {comp['length_diff_m']:+.1f} m ({comp['length_diff_pct']:+.1f}%)")
-    print(f"  Diferença de combustível: {comp['fuel_diff_liters']:+.3f} L ({comp['fuel_diff_pct']:+.1f}%)")
-    print(f"  Diferença de tempo: {comp['time_diff_min']:+.1f} min ({comp['time_diff_pct']:+.1f}%)")
+    return out
+
+
+def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str = "rotas_completo.html", zoom_start: int = 14) -> Path:
+    """
+    Renderiza todas as rotas (Dijkstra e A*) em um único arquivo HTML.
+    Reutiliza render_both_routes_to_html e adiciona seção A*.
+    """
+    import tempfile
+    import os
+    
+    # Gera HTML do Dijkstra primeiro
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp:
+        render_both_routes_to_html(start_addr, dest_addr, tmp.name, zoom_start)
+        dijkstra_path = tmp.name
+    
+    with open(dijkstra_path, 'r', encoding='utf-8') as f:
+        dijkstra_html = f.read()
+    
+    try:
+        os.unlink(dijkstra_path)
+    except:
+        pass
+    
+    # Calcula rotas A* e mede tempo total
+    astar_start_time = time.perf_counter()
+    result_eco_astar, result_short_astar = calculate_astar_routes(start_addr, dest_addr)
+    astar_total_time = time.perf_counter() - astar_start_time
+    
+    # Calcula também Dijkstra para comparação
+    dijkstra_start_time = time.perf_counter()
+    result_short_dijkstra, result_eco_dijkstra = calculate_route_dijkstra(start_addr, dest_addr)
+    dijkstra_total_time = time.perf_counter() - dijkstra_start_time
+    
+    # Carrega grafo para extrair coordenadas
+    G = build_graph_from_csv()
+    
+    # Cria mapas A* (similar ao que fazemos em render_both_routes_to_html)
+    coords_eco_astar = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_eco_astar['path_nodes']]
+    coords_short_astar = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_short_astar['path_nodes']]
+    
+    m_eco_astar = folium.Map(location=[coords_eco_astar[0][0], coords_eco_astar[0][1]], zoom_start=zoom_start, tiles="CartoDB positron")
+    m_short_astar = folium.Map(location=[coords_short_astar[0][0], coords_short_astar[0][1]], zoom_start=zoom_start, tiles="CartoDB positron")
+    
+    key_points_astar = get_key_points(G, result_eco_astar['path_nodes'])
+    addresses_astar = {}
+    for node_id, lat, lon in key_points_astar:
+        addresses_astar[node_id] = reverse_geocode(lat, lon)
+        time.sleep(1)
+    
+    folium.PolyLine(coords_eco_astar, color="blue", weight=5, opacity=0.8, tooltip=f"Rota Ecológica A* - {result_eco_astar['total_length_m']:.0f}m").add_to(m_eco_astar)
+    folium.PolyLine(coords_short_astar, color="red", weight=5, opacity=0.8, tooltip=f"Rota Mais Curta A* - {result_short_astar['total_length_m']:.0f}m").add_to(m_short_astar)
+    
+    for node_id, lat, lon in key_points_astar:
+        if node_id == result_eco_astar['start_node']:
+            address = addresses_astar.get(node_id, f"Lat: {lat:.6f}, Lon: {lon:.6f}")
+            folium.Marker((lat, lon), icon=folium.Icon(color="green"), tooltip="Início", popup=folium.Popup(f"<b>Início</b><br>{address}", max_width=300)).add_to(m_eco_astar)
+            folium.Marker((lat, lon), icon=folium.Icon(color="green"), tooltip="Início", popup=folium.Popup(f"<b>Início</b><br>{address}", max_width=300)).add_to(m_short_astar)
+        elif node_id == result_eco_astar['end_node']:
+            address = addresses_astar.get(node_id, f"Lat: {lat:.6f}, Lon: {lon:.6f}")
+            folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destino", popup=folium.Popup(f"<b>Destino</b><br>{address}", max_width=300)).add_to(m_eco_astar)
+            folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destino", popup=folium.Popup(f"<b>Destino</b><br>{address}", max_width=300)).add_to(m_short_astar)
+    
+    # ========== MAPA COMPARATIVO A* (ambas as rotas sobrepostas) ==========
+    center_lat_astar = (coords_eco_astar[0][0] + coords_short_astar[0][0]) / 2
+    center_lon_astar = (coords_eco_astar[0][1] + coords_short_astar[0][1]) / 2
+    m_comparison_astar = folium.Map(location=[center_lat_astar, center_lon_astar], zoom_start=zoom_start, tiles="CartoDB positron")
+    
+    folium.PolyLine(coords_eco_astar, color="blue", weight=5, opacity=0.8, tooltip="Rota Ecológica A*").add_to(m_comparison_astar)
+    folium.PolyLine(coords_short_astar, color="red", weight=5, opacity=0.8, tooltip="Rota Mais Curta A*").add_to(m_comparison_astar)
+    folium.Marker(coords_eco_astar[0], icon=folium.Icon(color="green"), tooltip="Início").add_to(m_comparison_astar)
+    folium.Marker(coords_eco_astar[-1], icon=folium.Icon(color="red"), tooltip="Destino").add_to(m_comparison_astar)
+    
+    # Salva mapas A* temporariamente
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp_eco:
+        m_eco_astar.save(tmp_eco.name)
+        tmp_eco_path = tmp_eco.name
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp_short:
+        m_short_astar.save(tmp_short.name)
+        tmp_short_path = tmp_short.name
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp_comparison_astar:
+        m_comparison_astar.save(tmp_comparison_astar.name)
+        tmp_comparison_astar_path = tmp_comparison_astar.name
+    
+    with open(tmp_eco_path, 'r', encoding='utf-8') as f:
+        eco_astar_html = f.read()
+    with open(tmp_short_path, 'r', encoding='utf-8') as f:
+        short_astar_html = f.read()
+    with open(tmp_comparison_astar_path, 'r', encoding='utf-8') as f:
+        comparison_astar_html = f.read()
+    
+    try:
+        os.unlink(tmp_eco_path)
+        os.unlink(tmp_short_path)
+        os.unlink(tmp_comparison_astar_path)
+    except:
+        pass
+    
+    # Extrai conteúdo dos mapas A*
+    eco_astar_map_match = re.search(r'<div[^>]*id="map[^"]*"[^>]*>(.*?)</div>\s*</body>', eco_astar_html, re.DOTALL)
+    eco_astar_map_id_match = re.search(r'<div[^>]*id="(map[^"]*)"', eco_astar_html)
+    eco_astar_map_id = eco_astar_map_id_match.group(1) if eco_astar_map_id_match else "map_eco_astar_temp"
+    
+    short_astar_map_match = re.search(r'<div[^>]*id="map[^"]*"[^>]*>(.*?)</div>\s*</body>', short_astar_html, re.DOTALL)
+    short_astar_map_id_match = re.search(r'<div[^>]*id="(map[^"]*)"', short_astar_html)
+    short_astar_map_id = short_astar_map_id_match.group(1) if short_astar_map_id_match else "map_short_astar_temp"
+    
+    comparison_astar_map_match = re.search(r'<div[^>]*id="map[^"]*"[^>]*>(.*?)</div>\s*</body>', comparison_astar_html, re.DOTALL)
+    comparison_astar_map_id_match = re.search(r'<div[^>]*id="(map[^"]*)"', comparison_astar_html)
+    comparison_astar_map_id = comparison_astar_map_id_match.group(1) if comparison_astar_map_id_match else "map_comparison_astar_temp"
+    
+    eco_astar_scripts = re.findall(r'<script[^>]*>.*?</script>', eco_astar_html, re.DOTALL)
+    short_astar_scripts = re.findall(r'<script[^>]*>.*?</script>', short_astar_html, re.DOTALL)
+    comparison_astar_scripts = re.findall(r'<script[^>]*>.*?</script>', comparison_astar_html, re.DOTALL)
+    
+    eco_astar_map_content = eco_astar_map_match.group(1) if eco_astar_map_match else ""
+    short_astar_map_content = short_astar_map_match.group(1) if short_astar_map_match else ""
+    comparison_astar_map_content = comparison_astar_map_match.group(1) if comparison_astar_map_match else ""
+    
+    eco_astar_scripts_clean = [s.replace(eco_astar_map_id, 'map_eco_astar_leaflet') for s in eco_astar_scripts]
+    short_astar_scripts_clean = [s.replace(short_astar_map_id, 'map_short_astar_leaflet') for s in short_astar_scripts]
+    comparison_astar_scripts_clean = [s.replace(comparison_astar_map_id, 'map_comparison_astar_leaflet') for s in comparison_astar_scripts]
+    
+    # Comparações
+    comp_eco = {
+        'length_diff_m': result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m'],
+        'length_diff_pct': ((result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m']) / result_eco_dijkstra['total_length_m']) * 100 if result_eco_dijkstra['total_length_m'] > 0 else 0,
+        'fuel_diff_liters': result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters'],
+        'fuel_diff_pct': ((result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters']) / result_eco_dijkstra['total_fuel_liters']) * 100 if result_eco_dijkstra['total_fuel_liters'] > 0 else 0,
+        'time_diff_min': result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min'],
+        'time_diff_pct': ((result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min']) / result_eco_dijkstra['total_time_min']) * 100 if result_eco_dijkstra['total_time_min'] > 0 else 0,
+    }
+    
+    comp_short = {
+        'length_diff_m': result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m'],
+        'length_diff_pct': ((result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m']) / result_short_dijkstra['total_length_m']) * 100 if result_short_dijkstra['total_length_m'] > 0 else 0,
+        'fuel_diff_liters': result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters'],
+        'fuel_diff_pct': ((result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters']) / result_short_dijkstra['total_fuel_liters']) * 100 if result_short_dijkstra['total_fuel_liters'] > 0 else 0,
+        'time_diff_min': result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min'],
+        'time_diff_pct': ((result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min']) / result_short_dijkstra['total_time_min']) * 100 if result_short_dijkstra['total_time_min'] > 0 else 0,
+    }
+    
+    # Comparação entre as rotas A* (ecológica vs mais curta) - mesma estrutura do Dijkstra
+    comp_astar = {
+        'length_diff_m': result_eco_astar['total_length_m'] - result_short_astar['total_length_m'],
+        'length_diff_pct': ((result_eco_astar['total_length_m'] - result_short_astar['total_length_m']) / result_short_astar['total_length_m']) * 100 if result_short_astar['total_length_m'] > 0 else 0,
+        'fuel_diff_liters': result_eco_astar['total_fuel_liters'] - result_short_astar['total_fuel_liters'],
+        'fuel_diff_pct': ((result_eco_astar['total_fuel_liters'] - result_short_astar['total_fuel_liters']) / result_short_astar['total_fuel_liters']) * 100 if result_short_astar['total_fuel_liters'] > 0 else 0,
+        'time_diff_min': result_eco_astar['total_time_min'] - result_short_astar['total_time_min'],
+        'time_diff_pct': ((result_eco_astar['total_time_min'] - result_short_astar['total_time_min']) / result_short_astar['total_time_min']) * 100 if result_short_astar['total_time_min'] > 0 else 0,
+    }
+    
+    # Ajusta os textos para mostrar valores absolutos quando necessário
+    fuel_diff_abs_astar = abs(comp_astar['fuel_diff_liters'])
+    length_diff_abs_astar = abs(comp_astar['length_diff_m'])
+    time_diff_abs_astar = abs(comp_astar['time_diff_min'])
+    
+    # Adiciona seção A* ao HTML do Dijkstra
+    astar_section = f'''
+        <!-- SEÇÃO A* -->
+        <div class="algorithm-section" style="margin-top: 50px; padding-top: 30px; border-top: 3px solid #1976d2;">
+            <div class="main-content">
+                <h2 style="font-size: 28px; font-weight: 600; color: #333; text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">Algoritmo A*</h2>
+                
+                <div class="maps-section">
+                <div class="map-card">
+                    <div class="map-card-header">
+                        <h2>Rota Ecológica A*</h2>
+                    </div>
+                    <div class="map-container">
+                        <div class="map" id="map_eco_astar">
+                            <div id="map_eco_astar_leaflet">
+                                {eco_astar_map_content}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="map-info">
+                        <h3>Informações da Rota</h3>
+                        <div class="metric">
+                            <span class="metric-label">Distância Total:</span>
+                            <span class="metric-value">{result_eco_astar['total_length_m']:.1f} metros</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Tempo Estimado:</span>
+                            <span class="metric-value">{result_eco_astar['total_time_min']:.1f} minutos</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Consumo de Combustível:</span>
+                            <span class="metric-value">{result_eco_astar['total_fuel_liters']:.3f} litros</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="map-card">
+                    <div class="map-card-header">
+                        <h2>Rota Mais Curta A*</h2>
+                    </div>
+                    <div class="map-container">
+                        <div class="map" id="map_short_astar">
+                            <div id="map_short_astar_leaflet">
+                                {short_astar_map_content}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="map-info">
+                        <h3>Informações da Rota</h3>
+                        <div class="metric">
+                            <span class="metric-label">Distância Total:</span>
+                            <span class="metric-value">{result_short_astar['total_length_m']:.1f} metros</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Tempo Estimado:</span>
+                            <span class="metric-value">{result_short_astar['total_time_min']:.1f} minutos</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Consumo de Combustível:</span>
+                            <span class="metric-value">{result_short_astar['total_fuel_liters']:.3f} litros</span>
+                        </div>
+                    </div>
+                </div>
+                </div>
+                
+                <div class="comparison-map-section">
+                    <h2>Comparação Visual das Rotas (A*)</h2>
+                    <div class="comparison-map-container">
+                        <div class="map" id="map_comparison_astar">
+                            <div id="map_comparison_astar_leaflet">
+                                {comparison_astar_map_content}
+                            </div>
+                        </div>
+                        <div class="comparison-legend">
+                            <h3>Legenda</h3>
+                            <div class="comparison-legend-item">
+                                <div class="comparison-legend-color eco"></div>
+                                <span>Rota Ecológica</span>
+                            </div>
+                            <div class="comparison-legend-item">
+                                <div class="comparison-legend-color short"></div>
+                                <span>Rota Mais Curta</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ANÁLISE COMPARATIVA DAS ROTAS A* -->
+                <div class="analysis-section">
+                    <h2>Análise Comparativa: Vantagens e Desvantagens (A*)</h2>
+                    <div class="analysis-content">
+                        <div class="analysis-box eco">
+                    <h3>Rota Ecológica A*</h3>
+                    <ul>
+                        <li><span class="advantage">✓ Vantagem:</span> Menor consumo de combustível ({fuel_diff_abs_astar:.3f}L de diferença)</li>
+                        <li><span class="advantage">✓ Vantagem:</span> {'Menor tempo de viagem' if comp_astar['time_diff_min'] < 0 else 'Tempo similar'}</li>
+                        <li><span class="advantage">✓ Vantagem:</span> Mais sustentável e econômica a longo prazo</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Distância ligeiramente maior' if comp_astar['length_diff_m'] > 0 else 'Distância similar'} ({length_diff_abs_astar:.1f}m)</li>
+                    </ul>
+                </div>
+                
+                <div class="analysis-box short">
+                    <h3>Rota Mais Curta A*</h3>
+                    <ul>
+                        <li><span class="advantage">✓ Vantagem:</span> Menor distância percorrida ({length_diff_abs_astar:.1f}m de diferença)</li>
+                        <li><span class="advantage">✓ Vantagem:</span> Caminho mais direto entre origem e destino</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> Maior consumo de combustível ({fuel_diff_abs_astar:.3f}L a mais)</li>
+                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Tempo de viagem maior' if comp_astar['time_diff_min'] > 0 else 'Tempo similar'} ({time_diff_abs_astar:.1f} min)</li>
+                    </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- COMPARAÇÃO DE PERFORMANCE: DIJKSTRA vs A* -->
+        <div class="performance-section" style="margin-top: 50px; padding-top: 30px; border-top: 3px solid #9c27b0;">
+            <div class="main-content">
+                <h2 style="font-size: 28px; font-weight: 600; color: #333; text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">Comparação de Performance dos Algoritmos</h2>
+            
+            <div class="performance-content" style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px;">
+                <div class="performance-box" style="padding: 25px; border-radius: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #2196f3; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h3 style="margin: 0 0 15px 0; font-size: 22px; font-weight: 600; color: #1976d2;">Algoritmo Dijkstra</h3>
+                    <div class="performance-metric" style="margin-bottom: 12px;">
+                        <span style="font-weight: 500; color: #666;">Tempo Total de Execução:</span>
+                        <span style="font-weight: 700; color: #1976d2; font-size: 18px; margin-left: 10px;">{dijkstra_total_time*1000:.2f} ms</span>
+                    </div>
+                    <div class="performance-metric" style="margin-bottom: 12px;">
+                        <span style="font-weight: 500; color: #666;">Rota Ecológica:</span>
+                        <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_eco_dijkstra.get('execution_time_seconds', 0)*1000:.2f} ms</span>
+                    </div>
+                    <div class="performance-metric" style="margin-bottom: 12px;">
+                        <span style="font-weight: 500; color: #666;">Rota Mais Curta:</span>
+                        <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_short_dijkstra.get('execution_time_seconds', 0)*1000:.2f} ms</span>
+                    </div>
+                    <p style="margin-top: 15px; font-style: italic; color: #555; font-size: 14px;">
+                        Algoritmo clássico de busca em grafos, explora todos os caminhos possíveis até encontrar o ótimo.
+                    </p>
+                </div>
+                
+                <div class="performance-box" style="padding: 25px; border-radius: 12px; background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                    <h3 style="margin: 0 0 15px 0; font-size: 22px; font-weight: 600; color: #7b1fa2;">Algoritmo A*</h3>
+                    <div class="performance-metric" style="margin-bottom: 12px;">
+                        <span style="font-weight: 500; color: #666;">Tempo Total de Execução:</span>
+                        <span style="font-weight: 700; color: #7b1fa2; font-size: 18px; margin-left: 10px;">{astar_total_time*1000:.2f} ms</span>
+                    </div>
+                    <div class="performance-metric" style="margin-bottom: 12px;">
+                        <span style="font-weight: 500; color: #666;">Rota Ecológica:</span>
+                        <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_eco_astar.get('execution_time_seconds', 0)*1000:.2f} ms</span>
+                    </div>
+                    <div class="performance-metric" style="margin-bottom: 12px;">
+                        <span style="font-weight: 500; color: #666;">Rota Mais Curta:</span>
+                        <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_short_astar.get('execution_time_seconds', 0)*1000:.2f} ms</span>
+                    </div>
+                    <p style="margin-top: 15px; font-style: italic; color: #555; font-size: 14px;">
+                        Algoritmo heurístico que usa informações sobre o destino para otimizar a busca.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="performance-comparison" style="margin-top: 30px; padding: 25px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <h3 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600; color: #333; text-align: center;">Análise de Performance</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #1976d2;">Diferença de Tempo:</h4>
+                        <p style="margin: 0; color: #555; font-size: 15px;">
+                            {'A* foi' if astar_total_time < dijkstra_total_time else 'Dijkstra foi'} 
+                            <strong style="color: #1976d2;">{abs((astar_total_time - dijkstra_total_time) / max(dijkstra_total_time, 0.0001) * 100):.1f}%</strong>
+                            {'mais rápido' if astar_total_time < dijkstra_total_time else 'mais rápido'}
+                            ({abs(astar_total_time - dijkstra_total_time)*1000:.2f} ms de diferença)
+                        </p>
+                    </div>
+                    <div>
+                        <h4 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #7b1fa2;">Eficiência:</h4>
+                        <p style="margin: 0; color: #555; font-size: 15px;">
+                            {'A* utiliza heurísticas para reduzir o espaço de busca, resultando em' if astar_total_time < dijkstra_total_time else 'Dijkstra explora sistematicamente todos os caminhos, garantindo'}
+                            {'tempos de execução menores.' if astar_total_time < dijkstra_total_time else 'otimalidade com possível custo computacional maior.'}
+                        </p>
+                    </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+        
+        {''.join(eco_astar_scripts_clean)}
+        {''.join(short_astar_scripts_clean)}
+        {''.join(comparison_astar_scripts_clean)}
+    '''
+    
+    # Insere seção A* antes do </body> e atualiza título
+    combined_html = dijkstra_html.replace('</body>', astar_section + '</body>')
+    combined_html = combined_html.replace(
+        '<h1>A*</h1>',
+        '<h1>DIJKSTRA</h1>'
+    )
+    
+    # Adiciona CSS para IDs A*
+    combined_html = combined_html.replace(
+        '#map_eco_leaflet, #map_short_leaflet, #map_comparison_leaflet {',
+        '#map_eco_leaflet, #map_short_leaflet, #map_comparison_leaflet, #map_eco_astar_leaflet, #map_short_astar_leaflet, #map_comparison_astar_leaflet {'
+    )
+    
+    out = Path(output_html).resolve()
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write(combined_html)
     
     return out
 
-
-def render_separate_routes_with_comparison(start_addr: str, dest_addr: str, 
-                                           output_dir: str = ".", 
-                                           zoom_start: int = 14) -> Tuple[Path, Path]:
-    """
-    Alias para render_both_routes_to_html que mantém compatibilidade.
-    Retorna o mesmo arquivo duas vezes para manter a assinatura.
-    """
-    output_file = Path(output_dir) / "rotas_comparacao.html"
-    result = render_both_routes_to_html(start_addr, dest_addr, str(output_file), zoom_start)
-    return result, result
-
-
-def render_route_to_html(start_addr: str, dest_addr: str, output_html: str = "rota.html", zoom_start: int = 14) -> Path:
-    """Renderiza apenas a rota ecológica (mantém compatibilidade)."""
-    G = build_graph_from_csv()
-    result = route_ecological(G, start_addr, dest_addr)
-
-    coords = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result['path_nodes']]
-    if not coords:
-        raise ValueError("Rota vazia, não há coordenadas para desenhar.")
-
-    m = folium.Map(location=[coords[0][0], coords[0][1]], zoom_start=zoom_start, tiles="CartoDB positron")
-    folium.PolyLine(coords, color="blue", weight=5, opacity=0.9, tooltip="Rota Ecológica").add_to(m)
-    folium.Marker(coords[0], icon=folium.Icon(color="green"), tooltip="Início").add_to(m)
-    folium.Marker(coords[-1], icon=folium.Icon(color="red"), tooltip="Destino").add_to(m)
-
-    out = Path(output_html).resolve()
-    m.save(str(out))
-    print(f"Mapa salvo em: {out}")
-    return out
