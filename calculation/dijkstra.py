@@ -519,20 +519,25 @@ def route_ecological_manual_dijkstra(G: nx.DiGraph, start_addr: str, dest_addr: 
     """
     Calcula rota ecológica usando implementação manual do Dijkstra.
     """
+    import time as time_module
     start_lat, start_lon, _ = geocode_address(start_addr)
     dest_lat, dest_lon, _ = geocode_address(dest_addr)
     
     start_node = nearest_node_to_point(G, start_lat, start_lon)
     end_node = nearest_node_to_point(G, dest_lat, dest_lon)
     
+    # Mede tempo de execução do algoritmo
+    start_time = time_module.perf_counter()
     try:
         path, _ = dijkstra_manual(G, start_node, end_node, weight='eco_cost')
     except nx.NetworkXNoPath:
         raise RuntimeError("Não há caminho entre os nós selecionados.")
+    execution_time = time_module.perf_counter() - start_time
     
     result = _process_path(G, path)
     result['start_node'] = start_node
     result['end_node'] = end_node
+    result['execution_time_seconds'] = execution_time
     
     return result
 

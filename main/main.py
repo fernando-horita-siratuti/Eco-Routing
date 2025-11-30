@@ -20,8 +20,8 @@ if __name__ == "__main__":
     calculate_route()
     print(f"Rota Calculada com sucesso")
 
-    start_addr = "Rua Padre Eustáquio, 716, Divinópolis, MG, Brasil"
-    dest_addr = "Rua Rio de Janeiro, 2220, Divinópolis, MG, Brasil"
+    start_addr = "Rua Padre Eustáquio, 710, Divinópolis, MG, Brasil"
+    dest_addr = "Álvares de Azevedo, 400, Divinópolis, MG, Brasil"
   
     # Renderiza todas as rotas (Dijkstra + A*) em um único arquivo
     print(f"Renderizando rotas")
