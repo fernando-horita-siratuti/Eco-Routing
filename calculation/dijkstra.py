@@ -6,9 +6,8 @@ import networkx as nx
 import numpy as np
 from geopy.geocoders import Nominatim
 from calculation.elevation import street_steepness
-# importa a função de inclinação (reaproveita seu módulo)
 
-# ========== PARÂMETROS (ajuste conforme desejar) ==========
+# ========== PARÂMETROS ==========
 BASE_L_PER_100KM = 10.0       # consumo base típico (L/100km) em velocidade moderada
 SLOPE_COEF = 10.0             # quanto a subida aumenta o consumo (multiplicador por unidade de slope)
 SPEED_PENALTY_COEF = 0.2      # penalidade por velocidades fora da referência (quadrática)
@@ -16,13 +15,22 @@ REF_SPEED_KMH = 50.0          # velocidade de referência para consumo (km/h)
 TIME_WEIGHT = 0.5             # quantos "litros equivalentes" atribuímos a 1 minuto extra (fator multiplica)
 # =========================================================
 
-# tenta localizar a pasta data onde seu main.py salva os CSVs
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 NODES_CSV = DEFAULT_DATA_DIR / "divinopolis_nodes.csv"
 EDGES_CSV = DEFAULT_DATA_DIR / "divinopolis_edges.csv"
 
 
 def _safe_float(val: object, fallback: float = 0.0) -> float:
+    """
+    Converte valor para float de forma segura, retornando fallback em caso de erro.
+    
+    Args:
+        val: Valor a ser convertido
+        fallback: Valor padrão caso a conversão falhe
+    
+    Returns:
+        Valor convertido para float ou fallback
+    """
     try:
         if val is None or (isinstance(val, str) and val.strip() == ""):
             return fallback
@@ -30,8 +38,20 @@ def _safe_float(val: object, fallback: float = 0.0) -> float:
     except Exception:
         return fallback
 
-# é a mesma funcao que esta em horizontal_displacement_m da elevation.py
+
 def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """
+    Calcula a distância haversine entre dois pontos geográficos.
+    
+    Args:
+        lon1: Longitude do primeiro ponto
+        lat1: Latitude do primeiro ponto
+        lon2: Longitude do segundo ponto
+        lat2: Latitude do segundo ponto
+    
+    Returns:
+        Distância em metros
+    """
     R = 6371000.0
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -42,6 +62,16 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
 
 
 def parse_maxspeed(val, default=REF_SPEED_KMH):
+    """
+    Parse do valor de maxspeed de uma string ou número.
+    
+    Args:
+        val: Valor a ser parseado (string ou número)
+        default: Valor padrão caso o parse falhe
+    
+    Returns:
+        Velocidade máxima em km/h
+    """
     if pd.isna(val) or val == "":
         return default
     try:
@@ -56,6 +86,16 @@ def parse_maxspeed(val, default=REF_SPEED_KMH):
 
 
 def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CSV) -> nx.DiGraph:
+    """
+    Constrói um grafo direcionado a partir dos arquivos CSV de nós e arestas.
+    
+    Args:
+        nodes_csv: Caminho para o arquivo CSV de nós
+        edges_csv: Caminho para o arquivo CSV de arestas
+    
+    Returns:
+        Grafo direcionado NetworkX com todos os atributos calculados
+    """
     if not nodes_csv.exists():
         raise FileNotFoundError(f"Nodes CSV não encontrado em: {nodes_csv}")
     if not edges_csv.exists():
@@ -323,6 +363,17 @@ def compress_street_segments(segments: List[Tuple[str, float, float, float]]) ->
 
 
 def route_ecological(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
+    """
+    Calcula a rota ecológica (otimizada para menor consumo de combustível).
+    
+    Args:
+        G: Grafo direcionado
+        start_addr: Endereço de origem
+        dest_addr: Endereço de destino
+    
+    Returns:
+        Dicionário com informações da rota (path_nodes, edges, métricas, tempo de execução)
+    """
     import time as time_module
     start_lat, start_lon, _ = geocode_address(start_addr)
     dest_lat, dest_lon, _ = geocode_address(dest_addr)
@@ -373,9 +424,6 @@ def route_ecological(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
         'execution_time_seconds': execution_time
     }
 
-# Calcula a menor rota sem ser a ecologica
-
-# Adicione após a função route_ecological (após linha 248)
 
 def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'length') -> Tuple[List[int], float]:
     """
@@ -548,13 +596,9 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
     Retorna dicionário com ambas as rotas e estatísticas comparativas.
     """
     import time as time_module
-    # Mede tempo total do algoritmo Dijkstra
     dijkstra_start_time = time_module.perf_counter()
     
-    #print("Calculando rota ecológica...")
     route_eco = route_ecological(G, start_addr, dest_addr)
-    
-    #print("Calculando rota mais curta (menor distância)...")
     route_short = route_shortest_distance(G, start_addr, dest_addr)
     
     dijkstra_total_time = time_module.perf_counter() - dijkstra_start_time
@@ -573,8 +617,6 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
         'total_execution_time_seconds': dijkstra_total_time
     }
 
-# Fim do dikistra normal
-# Substitua a função calculate_route() (linhas 251-272) por:
 
 def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
     """
@@ -584,23 +626,30 @@ def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
         compare: Se True, compara rota ecológica vs rota mais curta
         use_manual_dijkstra: Se True, usa implementação manual do Dijkstra para rota mais curta
     """
-    #print("Carregando grafo a partir dos CSVs...")
     G = build_graph_from_csv()
     
     start_address = "Rua Padre Eustáquio, 716, Divinópolis, MG, Brasil"
     dest_address = "Rua Rio de Janeiro, 2220, Divinópolis, MG, Brasil"
     
     if compare:
-        #print("Comparando rotas (ecológica vs mais curta)...")
         results = compare_routes(G, start_address, dest_address)
         return results
     else:
-        #print("Calculando rota ecológica...")
         result = route_ecological(G, start_address, dest_address)
         
         return result
 
 def calculate_route_dijkstra(start_addr: str, dest_addr: str):
+    """
+    Calcula rotas usando Dijkstra (mais curta e ecológica).
+    
+    Args:
+        start_addr: Endereço de origem
+        dest_addr: Endereço de destino
+    
+    Returns:
+        Tupla (result_short, result_eco) com os resultados das rotas
+    """
     G = build_graph_from_csv()
     result_short = route_shortest_distance(G, start_addr, dest_addr)
     result_eco = route_ecological_manual_dijkstra(G, start_addr, dest_addr)

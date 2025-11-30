@@ -1,10 +1,17 @@
-# /Users/hugohenriquemarques/Desktop/Trabalho Final AED2/Repositorio/TrabFinalAEDS2/calculation/render_map.py
 from pathlib import Path
 import folium
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import time
 import re
+import tempfile
+import os
+import matplotlib
+matplotlib.use('Agg')  # Backend sem GUI
+import matplotlib.pyplot as plt
+import numpy as np
+from io import BytesIO
+import base64
 from .dijkstra import build_graph_from_csv, calculate_route_dijkstra
 from .a_star import calculate_astar_routes
 
@@ -35,19 +42,17 @@ def reverse_geocode(lat: float, lon: float, user_agent: str = "meu_app", timeout
     return f"Lat: {lat:.6f}, Lon: {lon:.6f}"
 
 
-def get_key_points(G, path_nodes, max_points: int = 10):
+def get_key_points(G, path_nodes):
     """
     Seleciona apenas os pontos de início e fim da rota.
     
     Args:
         G: Grafo
         path_nodes: Lista de nós do caminho
-        max_points: Ignorado, sempre retorna apenas início e fim
     
     Returns:
         Lista de tuplas (node_id, lat, lon) com apenas início e fim
     """
-    # Retorna apenas início e fim
     if len(path_nodes) < 2:
         return [(path_nodes[0], float(G.nodes[path_nodes[0]]['y']), float(G.nodes[path_nodes[0]]['x']))]
     
@@ -55,6 +60,196 @@ def get_key_points(G, path_nodes, max_points: int = 10):
         (path_nodes[0], float(G.nodes[path_nodes[0]]['y']), float(G.nodes[path_nodes[0]]['x'])),
         (path_nodes[-1], float(G.nodes[path_nodes[-1]]['y']), float(G.nodes[path_nodes[-1]]['x']))
     ]
+
+
+def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name: str, 
+                               metric_label: str, unit: str, eco_value: float, short_value: float,
+                               algorithm_name: str = "") -> str:
+    """
+    Cria um gráfico de barras comparativo para uma única métrica.
+    
+    Args:
+        result_eco: Dicionário com dados da rota ecológica
+        result_short: Dicionário com dados da rota mais curta
+        metric_name: Nome da métrica (para título)
+        metric_label: Label para o eixo Y
+        unit: Unidade da métrica
+        eco_value: Valor da rota ecológica
+        short_value: Valor da rota mais curta
+        algorithm_name: Nome do algoritmo (para título)
+    
+    Returns:
+        String base64 da imagem PNG
+    """
+    # Configuração estilo científico
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except:
+            plt.style.use('default')
+    fig, ax = plt.subplots(figsize=(5, 4.5))
+    
+    # Dados
+    categories = ['Rota Ecológica', 'Rota Mais Curta']
+    values = [eco_value, short_value]
+    colors = ['#1976d2', '#d32f2f']
+    
+    # Cria barras
+    bars = ax.bar(categories, values, color=colors, alpha=0.8, width=0.6)
+    
+    # Formatação
+    ax.set_ylabel(f'{metric_label} ({unit})', fontsize=10, fontweight='bold')
+    title = f'{metric_name}'
+    if algorithm_name:
+        title += f' ({algorithm_name})'
+    ax.set_title(title, fontsize=12, fontweight='bold', pad=15)
+    ax.grid(True, alpha=0.3, linestyle='--', axis='y')
+    
+    # Adiciona valores nas barras
+    for bar in bars:
+        height = bar.get_height()
+        if height > 0:
+            # Formata valores de acordo com a unidade
+            if unit == 'm':
+                label = f'{height:.0f}'
+            elif unit == 'L':
+                label = f'{height:.3f}'
+            elif unit == 'min':
+                label = f'{height:.2f}'
+            else:
+                label = f'{height:.2f}'
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   label,
+                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    # Converte para base64
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode()
+    plt.close()
+    return f"data:image/png;base64,{image_base64}"
+
+
+def create_route_comparison_charts(result_eco: dict, result_short: dict, algorithm_name: str = "") -> tuple:
+    """
+    Cria 3 gráficos de barras comparativos separados entre Rota Ecológica e Rota Mais Curta.
+    
+    Args:
+        result_eco: Dicionário com dados da rota ecológica
+        result_short: Dicionário com dados da rota mais curta
+        algorithm_name: Nome do algoritmo (para título)
+    
+    Returns:
+        Tupla com 3 strings base64 (distância, combustível, tempo)
+    """
+    chart_distance = create_single_metric_chart(
+        result_eco, result_short, 'Distância', 'Distância', 'm',
+        result_eco.get('total_length_m', 0),
+        result_short.get('total_length_m', 0),
+        algorithm_name
+    )
+    
+    chart_fuel = create_single_metric_chart(
+        result_eco, result_short, 'Consumo de Combustível', 'Combustível', 'L',
+        result_eco.get('total_fuel_liters', 0),
+        result_short.get('total_fuel_liters', 0),
+        algorithm_name
+    )
+    
+    chart_time = create_single_metric_chart(
+        result_eco, result_short, 'Tempo de Viagem', 'Tempo de Viagem', 'min',
+        result_eco.get('total_time_min', 0),
+        result_short.get('total_time_min', 0),
+        algorithm_name
+    )
+    
+    return chart_distance, chart_fuel, chart_time
+
+
+def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit: str,
+                                     dijkstra_eco: float, dijkstra_short: float,
+                                     astar_eco: float, astar_short: float) -> str:
+    """
+    Cria gráfico de barras comparativo entre algoritmos Dijkstra e A*.
+    
+    Args:
+        metric_name: Nome da métrica (para título)
+        metric_label: Label para o eixo Y
+        unit: Unidade da métrica
+        dijkstra_eco: Valor da rota ecológica do Dijkstra
+        dijkstra_short: Valor da rota mais curta do Dijkstra
+        astar_eco: Valor da rota ecológica do A*
+        astar_short: Valor da rota mais curta do A*
+    
+    Returns:
+        String base64 da imagem PNG
+    """
+    # Configuração estilo científico
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except:
+            plt.style.use('default')
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Dados
+    categories = ['Rota Ecológica', 'Rota Mais Curta']
+    dijkstra_values = [dijkstra_eco, dijkstra_short]
+    astar_values = [astar_eco, astar_short]
+    
+    x = np.arange(len(categories))
+    width = 0.35
+    
+    # Cria barras
+    bars1 = ax.bar(x - width/2, dijkstra_values, width,
+                   label='Dijkstra', color='#1976d2', alpha=0.8)
+    bars2 = ax.bar(x + width/2, astar_values, width,
+                   label='A*', color='#7b1fa2', alpha=0.8)
+    
+    # Formatação
+    ax.set_ylabel(f'{metric_label} ({unit})', fontsize=12, fontweight='bold')
+    ax.set_title(f'Comparação {metric_name}: Dijkstra vs A*', fontsize=14, fontweight='bold', pad=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(categories, fontsize=11)
+    ax.legend(fontsize=11, loc='upper right')
+    ax.grid(True, alpha=0.3, linestyle='--', axis='y')
+    
+    # Adiciona valores nas barras
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                # Formata valores de acordo com a unidade
+                if unit == 'ms':
+                    label = f'{height:.2f}'
+                elif unit == 'm':
+                    label = f'{height:.0f}'
+                elif unit == 'L':
+                    label = f'{height:.3f}'
+                elif unit == 'min':
+                    label = f'{height:.2f}'
+                else:
+                    label = f'{height:.2f}'
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       label,
+                       ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    # Converte para base64
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
+    buffer.seek(0)
+    image_base64 = base64.b64encode(buffer.getvalue()).decode()
+    plt.close()
+    return f"data:image/png;base64,{image_base64}"
 
 
 def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str = "rotas_comparacao.html", zoom_start: int = 14) -> Path:
@@ -84,8 +279,6 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     if not coords_eco or not coords_short:
         raise ValueError("Uma das rotas está vazia, não há coordenadas para desenhar.")
     
-    # Obtém pontos-chave para reverse geocoding (apenas início e fim)
-    #print("Obtendo endereços dos pontos principais...")
     key_points_eco = get_key_points(G, result_eco['path_nodes'])
     key_points_short = get_key_points(G, result_short['path_nodes'])
     
@@ -204,9 +397,6 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
 
     # ========== CRIA HTML COMBINADO ==========
     # Salva os mapas temporariamente para obter o HTML completo
-    import tempfile
-    import os
-    
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp_eco:
         m_eco.save(tmp_eco.name)
         tmp_eco_path = tmp_eco.name
@@ -266,16 +456,16 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     # Calcula comparação localmente
     comp_dijkstra = {
         'length_diff_m': result_eco['total_length_m'] - result_short['total_length_m'],
-        'length_diff_pct': ((result_eco['total_length_m'] - result_short['total_length_m']) / result_short['total_length_m']) * 100 if result_short['total_length_m'] > 0 else 0,
         'fuel_diff_liters': result_short['total_fuel_liters'] - result_eco['total_fuel_liters'],
-        'fuel_diff_pct': ((result_eco['total_fuel_liters'] - result_short['total_fuel_liters']) / result_short['total_fuel_liters']) * 100 if result_short['total_fuel_liters'] > 0 else 0,
         'time_diff_min': result_eco['total_time_min'] - result_short['total_time_min'],
-        'time_diff_pct': ((result_eco['total_time_min'] - result_short['total_time_min']) / result_short['total_time_min']) * 100 if result_short['total_time_min'] > 0 else 0,
     }
 
     fuel_diff_dijkstra = comp_dijkstra['fuel_diff_liters']
     length_diff_dijkstra = comp_dijkstra['length_diff_m']
     time_diff_dijkstra = abs(comp_dijkstra['time_diff_min'])
+    
+    # Gera gráficos comparativos de rotas (3 gráficos separados)
+    chart_dijkstra_distance, chart_dijkstra_fuel, chart_dijkstra_time = create_route_comparison_charts(result_eco, result_short, "Dijkstra")
     
     # Prepara o conteúdo dos mapas
     eco_map_content = eco_map_match.group(1) if eco_map_match else ""
@@ -542,6 +732,46 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             color: #c62828;
             font-weight: 500;
         }}
+        .chart-section {{
+            margin-top: 30px;
+            padding: 25px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }}
+        .chart-section h3 {{
+            margin: 0 0 20px 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            text-align: center;
+        }}
+        .chart-section img {{
+            width: 100%;
+            max-width: 1000px;
+            display: block;
+            margin: 0 auto;
+            border-radius: 8px;
+        }}
+        .charts-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }}
+        .chart-item {{
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .chart-item h4 {{
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            text-align: center;
+        }}
         @media (max-width: 1200px) {{
             .maps-section {{
                 flex-direction: column;
@@ -555,6 +785,9 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             .analysis-content {{
                 grid-template-columns: 1fr;
             }}
+            .charts-grid {{
+                grid-template-columns: 1fr 1fr;
+            }}
         }}
         @media (max-width: 768px) {{
             .main-content {{
@@ -562,6 +795,9 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             }}
             .comparison-map-container {{
                 height: 400px;
+            }}
+            .charts-grid {{
+                grid-template-columns: 1fr;
             }}
         }}
     </style>
@@ -682,6 +918,24 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
                 </div>
             </div>
         </div>
+        
+        <div class="chart-section">
+            <h3>Comparação Visual: Rota Ecológica vs Rota Mais Curta (Dijkstra)</h3>
+            <div class="charts-grid">
+                <div class="chart-item">
+                    <h4>Distância</h4>
+                    <img src="{chart_dijkstra_distance}" alt="Gráfico Distância Dijkstra" style="width: 100%; border-radius: 8px;">
+                </div>
+                <div class="chart-item">
+                    <h4>Consumo de Combustível</h4>
+                    <img src="{chart_dijkstra_fuel}" alt="Gráfico Combustível Dijkstra" style="width: 100%; border-radius: 8px;">
+                </div>
+                <div class="chart-item">
+                    <h4>Tempo de Viagem</h4>
+                    <img src="{chart_dijkstra_time}" alt="Gráfico Tempo Dijkstra" style="width: 100%; border-radius: 8px;">
+                </div>
+            </div>
+        </div>
     </div>
     
     {''.join(eco_scripts_clean)}
@@ -703,9 +957,6 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     Renderiza todas as rotas (Dijkstra e A*) em um único arquivo HTML.
     Reutiliza render_both_routes_to_html e adiciona seção A*.
     """
-    import tempfile
-    import os
-    
     # Gera HTML do Dijkstra primeiro
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp:
         render_both_routes_to_html(start_addr, dest_addr, tmp.name, zoom_start)
@@ -820,39 +1071,29 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     short_astar_scripts_clean = [s.replace(short_astar_map_id, 'map_short_astar_leaflet') for s in short_astar_scripts]
     comparison_astar_scripts_clean = [s.replace(comparison_astar_map_id, 'map_comparison_astar_leaflet') for s in comparison_astar_scripts]
     
-    # Comparações
-    # comp_eco = {
-    #     'length_diff_m': result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m'],
-    #     'length_diff_pct': ((result_eco_astar['total_length_m'] - result_eco_dijkstra['total_length_m']) / result_eco_dijkstra['total_length_m']) * 100 if result_eco_dijkstra['total_length_m'] > 0 else 0,
-    #     'fuel_diff_liters': result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters'],
-    #     'fuel_diff_pct': ((result_eco_astar['total_fuel_liters'] - result_eco_dijkstra['total_fuel_liters']) / result_eco_dijkstra['total_fuel_liters']) * 100 if result_eco_dijkstra['total_fuel_liters'] > 0 else 0,
-    #     'time_diff_min': result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min'],
-    #     'time_diff_pct': ((result_eco_astar['total_time_min'] - result_eco_dijkstra['total_time_min']) / result_eco_dijkstra['total_time_min']) * 100 if result_eco_dijkstra['total_time_min'] > 0 else 0,
-    # }
-    
-    # comp_short = {
-    #     'length_diff_m': result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m'],
-    #     'length_diff_pct': ((result_short_astar['total_length_m'] - result_short_dijkstra['total_length_m']) / result_short_dijkstra['total_length_m']) * 100 if result_short_dijkstra['total_length_m'] > 0 else 0,
-    #     'fuel_diff_liters': result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters'],
-    #     'fuel_diff_pct': ((result_short_astar['total_fuel_liters'] - result_short_dijkstra['total_fuel_liters']) / result_short_dijkstra['total_fuel_liters']) * 100 if result_short_dijkstra['total_fuel_liters'] > 0 else 0,
-    #     'time_diff_min': result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min'],
-    #     'time_diff_pct': ((result_short_astar['total_time_min'] - result_short_dijkstra['total_time_min']) / result_short_dijkstra['total_time_min']) * 100 if result_short_dijkstra['total_time_min'] > 0 else 0,
-    # }
-    
     # Comparação entre as rotas A* (ecológica vs mais curta) - mesma estrutura do Dijkstra
     comp_astar = {
         'length_diff_m': result_eco_astar['total_length_m'] - result_short_astar['total_length_m'],
-        'length_diff_pct': ((result_eco_astar['total_length_m'] - result_short_astar['total_length_m']) / result_short_astar['total_length_m']) * 100 if result_short_astar['total_length_m'] > 0 else 0,
         'fuel_diff_liters': result_short_astar['total_fuel_liters'] - result_eco_astar['total_fuel_liters'],
-        'fuel_diff_pct': ((result_eco_astar['total_fuel_liters'] - result_short_astar['total_fuel_liters']) / result_short_astar['total_fuel_liters']) * 100 if result_short_astar['total_fuel_liters'] > 0 else 0,
         'time_diff_min': result_eco_astar['total_time_min'] - result_short_astar['total_time_min'],
-        'time_diff_pct': ((result_eco_astar['total_time_min'] - result_short_astar['total_time_min']) / result_short_astar['total_time_min']) * 100 if result_short_astar['total_time_min'] > 0 else 0,
     }
     
     # Ajusta os textos para mostrar valores absolutos quando necessário
     fuel_diff_astar = comp_astar['fuel_diff_liters']
     length_diff_astar = comp_astar['length_diff_m']
     time_diff_astar = abs(comp_astar['time_diff_min'])
+    
+    # Gera gráficos comparativos de rotas do A* (3 gráficos separados)
+    chart_astar_distance, chart_astar_fuel, chart_astar_time = create_route_comparison_charts(result_eco_astar, result_short_astar, "A*")
+    
+    # Gera gráfico comparativo de performance entre algoritmos (apenas tempo de execução)
+    chart_execution_time = create_algorithm_comparison_chart(
+        "Tempo de Execução", "Tempo", "ms",
+        result_eco_dijkstra.get('execution_time_seconds', 0) * 1000,
+        result_short_dijkstra.get('execution_time_seconds', 0) * 1000,
+        result_eco_astar.get('execution_time_seconds', 0) * 1000,
+        result_short_astar.get('execution_time_seconds', 0) * 1000
+    )
     
     # Adiciona seção A* ao HTML do Dijkstra
     astar_section = f'''
@@ -966,6 +1207,24 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                         </div>
                     </div>
                 </div>
+                
+                <div class="chart-section">
+                    <h3>Comparação Visual: Rota Ecológica vs Rota Mais Curta (A*)</h3>
+                    <div class="charts-grid">
+                        <div class="chart-item">
+                            <h4>Distância</h4>
+                            <img src="{chart_astar_distance}" alt="Gráfico Distância A*" style="width: 100%; border-radius: 8px;">
+                        </div>
+                        <div class="chart-item">
+                            <h4>Consumo de Combustível</h4>
+                            <img src="{chart_astar_fuel}" alt="Gráfico Combustível A*" style="width: 100%; border-radius: 8px;">
+                        </div>
+                        <div class="chart-item">
+                            <h4>Tempo de Viagem</h4>
+                            <img src="{chart_astar_time}" alt="Gráfico Tempo A*" style="width: 100%; border-radius: 8px;">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -1034,6 +1293,13 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                         </p>
                     </div>
                     </div>
+                </div>
+                
+                <div class="chart-section" style="margin-top: 30px;">
+                    <h3 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600; color: #333; text-align: center;">
+                        Comparação Visual de Performance: Tempo de Execução - Dijkstra vs A*
+                    </h3>
+                    <img src="{chart_execution_time}" alt="Gráfico Tempo de Execução" style="width: 100%; max-width: 1000px; display: block; margin: 0 auto; border-radius: 8px;">
                 </div>
             </div>
             </div>

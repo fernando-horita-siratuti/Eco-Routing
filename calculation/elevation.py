@@ -17,6 +17,7 @@ _RETRY_SLEEP = 1.0
 
 
 def _load_cache() -> None:
+    """Carrega cache de elevações do arquivo."""
     if _CACHE:
         return
     if not _CACHE_FILE.exists():
@@ -36,6 +37,7 @@ def _load_cache() -> None:
 
 
 def _save_cache() -> None:
+    """Salva cache de elevações no arquivo."""
     with _CACHE_LOCK:
         snapshot = dict(_CACHE)
         tmp_path = _CACHE_FILE.with_suffix(".tmp")
@@ -45,10 +47,21 @@ def _save_cache() -> None:
 
 
 def _coord_key(lat: float, lon: float, precision: int = 6) -> str:
+    """Gera chave de cache para coordenadas."""
     return f"{round(lat, precision)},{round(lon, precision)}"
 
 
 def _batched(iterable: Iterable[Tuple[float, float]], size: int) -> Iterable[List[Tuple[float, float]]]:
+    """
+    Divide um iterável em batches de tamanho especificado.
+    
+    Args:
+        iterable: Iterável de coordenadas
+        size: Tamanho de cada batch
+    
+    Yields:
+        Listas de coordenadas (batches)
+    """
     batch: List[Tuple[float, float]] = []
     for item in iterable:
         batch.append(item)
@@ -60,6 +73,15 @@ def _batched(iterable: Iterable[Tuple[float, float]], size: int) -> Iterable[Lis
 
 
 def _fetch_batch(coords: List[Tuple[float, float]]) -> Dict[str, Optional[float]]:
+    """
+    Busca elevações para um lote de coordenadas via API.
+    
+    Args:
+        coords: Lista de coordenadas (lat, lon)
+    
+    Returns:
+        Dicionário mapeando chaves de coordenadas para elevações
+    """
     locations = "|".join(f"{lat},{lon}" for lat, lon in coords)
     url = f"https://api.open-elevation.com/api/v1/lookup?locations={locations}"
 
@@ -101,6 +123,16 @@ def _fetch_batch(coords: List[Tuple[float, float]]) -> Dict[str, Optional[float]
 
 
 def _fetch_single(lat: float, lon: float) -> Optional[float]:
+    """
+    Busca elevação para uma única coordenada via API.
+    
+    Args:
+        lat: Latitude
+        lon: Longitude
+    
+    Returns:
+        Elevação em metros ou None se não encontrada
+    """
     url = f"https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}"
     for attempt in range(_RETRY_ATTEMPTS):
         try:
@@ -123,7 +155,15 @@ def _fetch_single(lat: float, lon: float) -> Optional[float]:
 
 
 def get_elevations(coords: List[Tuple[float, float]]) -> List[Optional[float]]:
-    """Busca elevação para uma lista de coordenadas com cache e requisições em lote."""
+    """
+    Busca elevação para uma lista de coordenadas com cache e requisições em lote.
+    
+    Args:
+        coords: Lista de coordenadas (lat, lon)
+    
+    Returns:
+        Lista de elevações correspondentes (None se não encontrada)
+    """
     _load_cache()
 
     results: List[Optional[float]] = []
@@ -154,17 +194,37 @@ def get_elevations(coords: List[Tuple[float, float]]) -> List[Optional[float]]:
 
     return results
 
-# Comentario para o ChatGPT
+
 def get_elevation(lat: float, lon: float) -> Optional[float]:
-    """Busca elevação de um ponto usando cache e requisições em lote."""
+    """
+    Busca elevação de um ponto usando cache e requisições em lote.
+    
+    Args:
+        lat: Latitude
+        lon: Longitude
+    
+    Returns:
+        Elevação em metros ou None se não encontrada
+    """
     returned = get_elevations([(lat, lon)])
     return returned[0] if returned else None
 
+
 def horizontal_displacement_m(lat1, lon1, lat2, lon2):
-    """Retorna (x, y, dist_horizontal) em metros.
-    x = deslocamento leste (positivo para leste)
-    y = deslocamento norte (positivo para norte)
-    dist_horizontal = sqrt(x^2 + y^2)
+    """
+    Calcula deslocamento horizontal entre dois pontos geográficos.
+    
+    Args:
+        lat1: Latitude do primeiro ponto
+        lon1: Longitude do primeiro ponto
+        lat2: Latitude do segundo ponto
+        lon2: Longitude do segundo ponto
+    
+    Returns:
+        Tupla (x, y, dist_horizontal) em metros
+        - x: deslocamento leste (positivo para leste)
+        - y: deslocamento norte (positivo para norte)
+        - dist_horizontal: distância horizontal (sqrt(x^2 + y^2))
     """
     R = 6371000.0 
     φ1, φ2 = math.radians(lat1), math.radians(lat2)
@@ -177,13 +237,23 @@ def horizontal_displacement_m(lat1, lon1, lat2, lon2):
     return x, y, dist
 
 def street_steepness(lat1, lon1, h1, lat2, lon2, h2):
-    """Retorna um dicionário com:
-       - dh: diferença de elevação (h2 - h1) em metros
-       - dist_horizontal: distância plana em metros
-       - dist_3d: distância entre os pontos em 3D (m)
-       - grade: razão dh / dist_horizontal (None se indeterminado)
-       - inclination_deg: ângulo de inclinação vertical em graus (positivo = sobe de p1 para p2)
-       - inclination_percent: inclinação em porcentagem (None se indeterminado)
+    """
+    Calcula a inclinação de uma rua entre dois pontos.
+    
+    Args:
+        lat1: Latitude do primeiro ponto
+        lon1: Longitude do primeiro ponto
+        h1: Elevação do primeiro ponto (metros)
+        lat2: Latitude do segundo ponto
+        lon2: Longitude do segundo ponto
+        h2: Elevação do segundo ponto (metros)
+    
+    Returns:
+        Dicionário com:
+        - dh_m: diferença de elevação (h2 - h1) em metros
+        - grade: razão dh / dist_horizontal (None se indeterminado)
+        - inclination_deg: ângulo de inclinação vertical em graus
+        - inclination_percent: inclinação em porcentagem (None se indeterminado)
     """
     x, y, dist_h = horizontal_displacement_m(lat1, lon1, lat2, lon2)
     dh = h2 - h1

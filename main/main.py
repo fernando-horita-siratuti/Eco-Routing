@@ -1,5 +1,4 @@
 from calculation.data_processing import gerar_csvs
-from calculation.dijkstra import calculate_route
 from pathlib import Path
 from calculation.render_map import render_all_routes_combined
 import warnings
@@ -12,17 +11,15 @@ if __name__ == "__main__":
     edges_csv = data_dir / "divinopolis_edges.csv"
 
     if nodes_csv.exists() and edges_csv.exists():
-        print(f"Dados Tratados com sucesso")
+        print("Dados tratados com sucesso.")
     else:
+        print("Gerando dados...")
         gerar_csvs()
-        print(f"Dados Tratados com sucesso")
-
-    calculate_route()
-    print(f"Rota Calculada com sucesso")
+        print("Dados tratados com sucesso.")
 
     start_addr = "Rua Padre Eustáquio, 710, Divinópolis, MG, Brasil"
     dest_addr = "Álvares de Azevedo, 400, Divinópolis, MG, Brasil"
   
-    # Renderiza todas as rotas (Dijkstra + A*) em um único arquivo
-    print(f"Renderizando rotas")
+    print("Renderizando rotas...")
     render_all_routes_combined(start_addr, dest_addr, output_html="rotas.html")
+    print("Rotas renderizadas com sucesso.")

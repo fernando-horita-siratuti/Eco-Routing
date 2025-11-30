@@ -1,8 +1,7 @@
-from typing import List, Tuple, Dict, Optional
+from typing import Dict
 import math
 import networkx as nx
 
-# Import helpers and params from routing (ajustado para routing.py ao invés de dijkstra.py)
 from calculation.dijkstra import (
     haversine,
     nearest_node_to_point,
@@ -12,9 +11,7 @@ from calculation.dijkstra import (
     build_graph_from_csv,
 )
 
-# -------------------------
-# Heuristic: admissible lower bound for shortest distance
-# -------------------------
+
 def _make_astar_heuristic_shortest(G: nx.DiGraph):
     """
     Build an admissible heuristic for the shortest distance:
@@ -38,9 +35,7 @@ def _make_astar_heuristic_shortest(G: nx.DiGraph):
     
     return heuristic
 
-# -------------------------
-# Core: A* route by coordinates (shortest distance)
-# -------------------------
+
 def route_shortest_a_star_by_coords(
     G: nx.DiGraph,
     start_lat: float,
@@ -105,9 +100,7 @@ def route_shortest_a_star_by_coords(
         "execution_time_seconds": execution_time,
     }
 
-# -------------------------
-# Convenience: A* route by addresses (geocode + call coords version)
-# -------------------------
+
 def route_shortest_a_star_by_addresses(
     G: nx.DiGraph,
     start_addr: str,
@@ -123,9 +116,7 @@ def route_shortest_a_star_by_addresses(
     
     return route_shortest_a_star_by_coords(G, start_lat, start_lon, dest_lat, dest_lon)
 
-# -------------------------
-# Heuristic: admissible lower bound for eco_cost (já mencionado no código do usuário)
-# -------------------------
+
 def _make_astar_heuristic_eco(G: nx.DiGraph):
     """
     Build an admissible heuristic for the ecological cost:
@@ -175,9 +166,7 @@ def _make_astar_heuristic_eco(G: nx.DiGraph):
     
     return heuristic
 
-# -------------------------
-# Core: A* route by coordinates (ecological)
-# -------------------------
+
 def route_ecological_a_star_by_coords(
     G: nx.DiGraph,
     start_lat: float,
@@ -240,9 +229,7 @@ def route_ecological_a_star_by_coords(
         "execution_time_seconds": execution_time,
     }
 
-# -------------------------
-# Convenience: A* route by addresses (ecological)
-# -------------------------
+
 def route_ecological_a_star_by_addresses(
     G: nx.DiGraph,
     start_addr: str,
@@ -260,6 +247,16 @@ def route_ecological_a_star_by_addresses(
 
 
 def calculate_astar_routes(start_addr: str, dest_addr: str):
+    """
+    Calcula rotas usando A* (ecológica e mais curta).
+    
+    Args:
+        start_addr: Endereço de origem
+        dest_addr: Endereço de destino
+    
+    Returns:
+        Tupla (result_eco, result_short) com os resultados das rotas
+    """
     G = build_graph_from_csv()
     result_eco = route_ecological_a_star_by_addresses(G, start_addr, dest_addr)
     result_short = route_shortest_a_star_by_addresses(G, start_addr, dest_addr)

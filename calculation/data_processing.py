@@ -1,4 +1,3 @@
-# /Users/hugohenriquemarques/Desktop/Trabalho Final AED2/Repositorio/TrabFinalAEDS2/main/export_csv.py
 import math
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,10 +16,20 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _round_coord(value: float) -> float:
+    """Arredonda coordenada para precisão definida."""
     return round(value, ROUND_PRECISION)
 
 
 def _is_missing_elevation(value) -> bool:
+    """
+    Verifica se o valor de elevação está faltando ou é inválido.
+    
+    Args:
+        value: Valor a ser verificado
+    
+    Returns:
+        True se o valor está faltando ou é inválido
+    """
     if value in ('', None):
         return True
     if isinstance(value, str) and not value.strip():
@@ -35,6 +44,16 @@ def _is_missing_elevation(value) -> bool:
 
 
 def _chunked(seq: List[Tuple[float, float]], size: int):
+    """
+    Divide uma sequência em chunks de tamanho especificado.
+    
+    Args:
+        seq: Sequência a ser dividida
+        size: Tamanho de cada chunk
+    
+    Yields:
+        Chunks da sequência
+    """
     for i in range(0, len(seq), size):
         yield seq[i:i + size]
 
@@ -76,7 +95,6 @@ def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
         nodes_data.append(nodes_entry)
 
     if coords_to_fetch:
-        #print(f"Consultando elevação para {len(coord_to_indexes)} coordenadas faltantes...")
         with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as executor:
             futures = {
                 executor.submit(get_elevations, batch): batch
