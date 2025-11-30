@@ -5,7 +5,7 @@ import pandas as pd
 import networkx as nx
 import numpy as np
 from geopy.geocoders import Nominatim
-from calculation.elevation import street_steepness
+from calculation.elevation import street_steepness, EARTH_RADIUS_M
 
 # ========== PARÂMETROS ==========
 BASE_L_PER_100KM = 10.0       # consumo base típico (L/100km) em velocidade moderada
@@ -52,13 +52,12 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     Returns:
         Distância em metros
     """
-    R = 6371000.0
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    return 2*R*math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return 2*EARTH_RADIUS_M*math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 def parse_maxspeed(val, default=REF_SPEED_KMH):

@@ -15,6 +15,8 @@ _MAX_BATCH_SIZE = 50
 _RETRY_ATTEMPTS = 3
 _RETRY_SLEEP = 1.0
 
+EARTH_RADIUS_M = 6371000.0
+
 
 def _load_cache() -> None:
     """Carrega cache de elevações do arquivo."""
@@ -226,13 +228,12 @@ def horizontal_displacement_m(lat1, lon1, lat2, lon2):
         - y: deslocamento norte (positivo para norte)
         - dist_horizontal: distância horizontal (sqrt(x^2 + y^2))
     """
-    R = 6371000.0 
     φ1, φ2 = math.radians(lat1), math.radians(lat2)
     λ1, λ2 = math.radians(lon1), math.radians(lon2)
     dφ = φ2 - φ1
     dλ = λ2 - λ1
-    x = dλ * math.cos((φ1 + φ2) / 2) * R
-    y = dφ * R
+    x = dλ * math.cos((φ1 + φ2) / 2) * EARTH_RADIUS_M
+    y = dφ * EARTH_RADIUS_M
     dist = math.hypot(x, y)
     return x, y, dist
 
