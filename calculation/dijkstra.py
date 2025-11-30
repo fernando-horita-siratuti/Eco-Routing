@@ -617,27 +617,6 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
     }
 
 
-def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
-    """
-    Calcula rotas e compara se solicitado.
-    
-    Args:
-        compare: Se True, compara rota ecológica vs rota mais curta
-        use_manual_dijkstra: Se True, usa implementação manual do Dijkstra para rota mais curta
-    """
-    G = build_graph_from_csv()
-    
-    start_address = "Rua Padre Eustáquio, 716, Divinópolis, MG, Brasil"
-    dest_address = "Rua Rio de Janeiro, 2220, Divinópolis, MG, Brasil"
-    
-    if compare:
-        results = compare_routes(G, start_address, dest_address)
-        return results
-    else:
-        result = route_ecological(G, start_address, dest_address)
-        
-        return result
-
 def calculate_route_dijkstra(start_addr: str, dest_addr: str):
     """
     Calcula rotas usando Dijkstra (mais curta e ecológica).
@@ -653,4 +632,3 @@ def calculate_route_dijkstra(start_addr: str, dest_addr: str):
     result_short = route_shortest_distance(G, start_addr, dest_addr)
     result_eco = route_ecological_manual_dijkstra(G, start_addr, dest_addr)
     return result_short, result_eco
-
