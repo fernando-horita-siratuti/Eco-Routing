@@ -57,7 +57,7 @@ def route_shortest_a_star_by_coords(
     
     heuristic = _make_astar_heuristic_shortest(G)
     
-    # Mede tempo de execução do algoritmo
+    # Measure algorithm execution time
     start_time = time_module.perf_counter()
     try:
         path = nx.astar_path(G, start_node, end_node, heuristic=heuristic, weight="length")
@@ -186,7 +186,7 @@ def route_ecological_a_star_by_coords(
     
     heuristic = _make_astar_heuristic_eco(G)
     
-    # Mede tempo de execução do algoritmo
+    # Measure algorithm execution time
     start_time = time_module.perf_counter()
     try:
         path = nx.astar_path(G, start_node, end_node, heuristic=heuristic, weight="eco_cost")

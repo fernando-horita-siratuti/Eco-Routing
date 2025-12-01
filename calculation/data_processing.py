@@ -16,19 +16,19 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _round_coord(value: float) -> float:
-    """Arredonda coordenada para precisão definida."""
+    """Rounds coordinate to defined precision."""
     return round(value, ROUND_PRECISION)
 
 
 def _is_missing_elevation(value) -> bool:
     """
-    Verifica se o valor de elevação está faltando ou é inválido.
+    Checks if elevation value is missing or invalid.
     
     Args:
-        value: Valor a ser verificado
+        value: Value to be checked
     
     Returns:
-        True se o valor está faltando ou é inválido
+        True if value is missing or invalid
     """
     if value in ('', None):
         return True
@@ -45,14 +45,14 @@ def _is_missing_elevation(value) -> bool:
 
 def _chunked(seq: List[Tuple[float, float]], size: int):
     """
-    Divide uma sequência em chunks de tamanho especificado.
+    Divides a sequence into chunks of specified size.
     
     Args:
-        seq: Sequência a ser dividida
-        size: Tamanho de cada chunk
+        seq: Sequence to be divided
+        size: Size of each chunk
     
     Yields:
-        Chunks da sequência
+        Sequence chunks
     """
     for i in range(0, len(seq), size):
         yield seq[i:i + size]
@@ -60,9 +60,20 @@ def _chunked(seq: List[Tuple[float, float]], size: int):
 
 def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
     """
-    Gera os arquivos CSV de nós e arestas para o lugar informado (OSMnx).
-    Retorna (nodes_csv_path, edges_csv_path).
+    Generates CSV files of nodes and edges for the specified place (OSMnx).
+    Returns (nodes_csv_path, edges_csv_path).
+    
+    NOTE: To adapt this for another city, change:
+    - Default place parameter to your target city
+    - CSV filenames (lines 113, 130) to match your city name
+    
+    Args:
+        place: Place name in format "City, State, Country" (OSMnx format)
+    
+    Returns:
+        Tuple of (nodes_csv_path, edges_csv_path)
     """
+    # TO ADAPT FOR ANOTHER CITY: Change the default place parameter above
     G = ox.graph_from_place(place, network_type='drive')
 
     nodes_data: List[Dict[str, object]] = []
@@ -110,6 +121,7 @@ def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
                         nodes_data[node_idx]['elevation'] = elevation if elevation is not None else ''
 
     df_nodes = pd.DataFrame(nodes_data)
+    # TO ADAPT FOR ANOTHER CITY: Change filename to match your city (e.g., "yourcity_nodes.csv")
     nodes_csv = OUTPUT_DIR / "divinopolis_nodes.csv"
     df_nodes.to_csv(nodes_csv, index=False)
 
@@ -127,6 +139,7 @@ def gerar_csvs(place: str = "Divinópolis, MG, Brazil") -> Tuple[Path, Path]:
         })
 
     df_edges = pd.DataFrame(edges_data)
+    # TO ADAPT FOR ANOTHER CITY: Change filename to match your city (e.g., "yourcity_edges.csv")
     edges_csv = OUTPUT_DIR / "divinopolis_edges.csv"
     df_edges.to_csv(edges_csv, index=False)
 

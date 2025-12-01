@@ -19,7 +19,7 @@ EARTH_RADIUS_M = 6371000.0
 
 
 def _load_cache() -> None:
-    """Carrega cache de elevações do arquivo."""
+    """Loads elevation cache from file."""
     if _CACHE:
         return
     if not _CACHE_FILE.exists():
@@ -39,7 +39,7 @@ def _load_cache() -> None:
 
 
 def _save_cache() -> None:
-    """Salva cache de elevações no arquivo."""
+    """Saves elevation cache to file."""
     with _CACHE_LOCK:
         snapshot = dict(_CACHE)
         tmp_path = _CACHE_FILE.with_suffix(".tmp")
@@ -49,20 +49,20 @@ def _save_cache() -> None:
 
 
 def _coord_key(lat: float, lon: float, precision: int = 6) -> str:
-    """Gera chave de cache para coordenadas."""
+    """Generates cache key for coordinates."""
     return f"{round(lat, precision)},{round(lon, precision)}"
 
 
 def _batched(iterable: Iterable[Tuple[float, float]], size: int) -> Iterable[List[Tuple[float, float]]]:
     """
-    Divide um iterável em batches de tamanho especificado.
+    Divides an iterable into batches of specified size.
     
     Args:
-        iterable: Iterável de coordenadas
-        size: Tamanho de cada batch
+        iterable: Iterable of coordinates
+        size: Size of each batch
     
     Yields:
-        Listas de coordenadas (batches)
+        Lists of coordinates (batches)
     """
     batch: List[Tuple[float, float]] = []
     for item in iterable:
@@ -76,13 +76,13 @@ def _batched(iterable: Iterable[Tuple[float, float]], size: int) -> Iterable[Lis
 
 def _fetch_batch(coords: List[Tuple[float, float]]) -> Dict[str, Optional[float]]:
     """
-    Busca elevações para um lote de coordenadas via API.
+    Fetches elevations for a batch of coordinates via API.
     
     Args:
-        coords: Lista de coordenadas (lat, lon)
+        coords: List of coordinates (lat, lon)
     
     Returns:
-        Dicionário mapeando chaves de coordenadas para elevações
+        Dictionary mapping coordinate keys to elevations
     """
     locations = "|".join(f"{lat},{lon}" for lat, lon in coords)
     url = f"https://api.open-elevation.com/api/v1/lookup?locations={locations}"
@@ -126,14 +126,14 @@ def _fetch_batch(coords: List[Tuple[float, float]]) -> Dict[str, Optional[float]
 
 def _fetch_single(lat: float, lon: float) -> Optional[float]:
     """
-    Busca elevação para uma única coordenada via API.
+    Fetches elevation for a single coordinate via API.
     
     Args:
         lat: Latitude
         lon: Longitude
     
     Returns:
-        Elevação em metros ou None se não encontrada
+        Elevation in meters or None if not found
     """
     url = f"https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}"
     for attempt in range(_RETRY_ATTEMPTS):
@@ -158,13 +158,13 @@ def _fetch_single(lat: float, lon: float) -> Optional[float]:
 
 def get_elevations(coords: List[Tuple[float, float]]) -> List[Optional[float]]:
     """
-    Busca elevação para uma lista de coordenadas com cache e requisições em lote.
+    Fetches elevation for a list of coordinates with cache and batch requests.
     
     Args:
-        coords: Lista de coordenadas (lat, lon)
+        coords: List of coordinates (lat, lon)
     
     Returns:
-        Lista de elevações correspondentes (None se não encontrada)
+        List of corresponding elevations (None if not found)
     """
     _load_cache()
 
@@ -199,14 +199,14 @@ def get_elevations(coords: List[Tuple[float, float]]) -> List[Optional[float]]:
 
 def get_elevation(lat: float, lon: float) -> Optional[float]:
     """
-    Busca elevação de um ponto usando cache e requisições em lote.
+    Fetches elevation of a point using cache and batch requests.
     
     Args:
         lat: Latitude
         lon: Longitude
     
     Returns:
-        Elevação em metros ou None se não encontrada
+        Elevation in meters or None if not found
     """
     returned = get_elevations([(lat, lon)])
     return returned[0] if returned else None
@@ -214,19 +214,19 @@ def get_elevation(lat: float, lon: float) -> Optional[float]:
 
 def horizontal_displacement_m(lat1, lon1, lat2, lon2):
     """
-    Calcula deslocamento horizontal entre dois pontos geográficos.
+    Calculates horizontal displacement between two geographic points.
     
     Args:
-        lat1: Latitude do primeiro ponto
-        lon1: Longitude do primeiro ponto
-        lat2: Latitude do segundo ponto
-        lon2: Longitude do segundo ponto
+        lat1: Latitude of first point
+        lon1: Longitude of first point
+        lat2: Latitude of second point
+        lon2: Longitude of second point
     
     Returns:
-        Tupla (x, y, dist_horizontal) em metros
-        - x: deslocamento leste (positivo para leste)
-        - y: deslocamento norte (positivo para norte)
-        - dist_horizontal: distância horizontal (sqrt(x^2 + y^2))
+        Tuple (x, y, dist_horizontal) in meters
+        - x: east displacement (positive for east)
+        - y: north displacement (positive for north)
+        - dist_horizontal: horizontal distance (sqrt(x^2 + y^2))
     """
     φ1, φ2 = math.radians(lat1), math.radians(lat2)
     λ1, λ2 = math.radians(lon1), math.radians(lon2)
@@ -239,33 +239,33 @@ def horizontal_displacement_m(lat1, lon1, lat2, lon2):
 
 def street_steepness(lat1, lon1, h1, lat2, lon2, h2):
     """
-    Calcula a inclinação de uma rua entre dois pontos.
+    Calculates the steepness of a street between two points.
     
     Args:
-        lat1: Latitude do primeiro ponto
-        lon1: Longitude do primeiro ponto
-        h1: Elevação do primeiro ponto (metros)
-        lat2: Latitude do segundo ponto
-        lon2: Longitude do segundo ponto
-        h2: Elevação do segundo ponto (metros)
+        lat1: Latitude of first point
+        lon1: Longitude of first point
+        h1: Elevation of first point (meters)
+        lat2: Latitude of second point
+        lon2: Longitude of second point
+        h2: Elevation of second point (meters)
     
     Returns:
-        Dicionário com:
-        - dh_m: diferença de elevação (h2 - h1) em metros
-        - grade: razão dh / dist_horizontal (None se indeterminado)
-        - inclination_deg: ângulo de inclinação vertical em graus
-        - inclination_percent: inclinação em porcentagem (None se indeterminado)
+        Dictionary with:
+        - dh_m: elevation difference (h2 - h1) in meters
+        - grade: ratio dh / dist_horizontal (None if indeterminate)
+        - inclination_deg: vertical inclination angle in degrees
+        - inclination_percent: inclination in percentage (None if indeterminate)
     """
     x, y, dist_h = horizontal_displacement_m(lat1, lon1, lat2, lon2)
     dh = h2 - h1
-    # distância 3D (hipotenusa)
+    # 3D distance (hypotenuse)
     dist_3d = math.hypot(dist_h, dh)
 
-    # Inclinação: use atan2(dh, dist_h) — lida corretamente com sinais e com dist_h == 0
-    inclination_rad = math.atan2(dh, dist_h)  # se dist_h == 0 e dh != 0 -> ±pi/2 (±90°)
+    # Inclination: use atan2(dh, dist_h) — correctly handles signs and dist_h == 0
+    inclination_rad = math.atan2(dh, dist_h)  # if dist_h == 0 and dh != 0 -> ±pi/2 (±90°)
     inclination_deg = math.fabs(math.degrees(inclination_rad))
 
-    # grade (razão) e porcentagem: se dist_h == 0, fica indefinido (None)
+    # grade (ratio) and percentage: if dist_h == 0, becomes undefined (None)
     if dist_h == 0:
         grade = None
         inclination_percent = None

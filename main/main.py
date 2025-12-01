@@ -7,6 +7,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 if __name__ == "__main__":
     data_dir = Path(__file__).resolve().parent.parent / "data"
+    # TO ADAPT FOR ANOTHER CITY: Change CSV filenames to match your city (e.g., "yourcity_nodes.csv")
     nodes_csv = data_dir / "divinopolis_nodes.csv"
     edges_csv = data_dir / "divinopolis_edges.csv"
 
@@ -14,12 +15,15 @@ if __name__ == "__main__":
         print("Data processed successfully.")
     else:
         print("Generating data...")
+        # TO ADAPT FOR ANOTHER CITY: Change default place parameter in gerar_csvs() function
         gerar_csvs()
         print("Data processed successfully.")
 
     # Example with neighborhood (optional, but more precise)
-    start_addr = "Rua Pains, 75, Centro, Divinópolis, MG, Brasil"
-    dest_addr = "Rua Padre Eustáquio, 716, Santa Rosa, Divinópolis, MG, Brasil"
+    # TO ADAPT FOR ANOTHER CITY: Replace addresses with addresses from your target city
+    # Format: "Street Name, Number, Neighborhood, City, State, Country"
+    start_addr = "Avenida Amazonas, 277, Centro, Divinópolis, MG, Brasil"
+    dest_addr = "Rua Bahia, 801, Centro, Divinópolis, MG, Brasil"
   
     print("Rendering routes...")
     render_all_routes_combined(start_addr, dest_addr, output_html="rotas.html")

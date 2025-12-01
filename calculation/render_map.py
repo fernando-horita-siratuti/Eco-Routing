@@ -7,7 +7,7 @@ import re
 import tempfile
 import os
 import matplotlib
-matplotlib.use('Agg')  # Backend sem GUI
+matplotlib.use('Agg')  # Backend without GUI
 import matplotlib.pyplot as plt
 import numpy as np
 from io import BytesIO
@@ -38,7 +38,7 @@ def reverse_geocode(lat: float, lon: float, user_agent: str = "meu_app", timeout
     except Exception as e:
         print(f"Erro inesperado no reverse geocoding: {e}")
     
-    # Fallback: retorna coordenadas formatadas
+    # Fallback: returns formatted coordinates
     return f"Lat: {lat:.6f}, Lon: {lon:.6f}"
 
 
@@ -81,7 +81,7 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
     Returns:
         Base64 string of PNG image
     """
-    # Configuração estilo científico
+    # Scientific style configuration
     try:
         plt.style.use('seaborn-v0_8-whitegrid')
     except:
@@ -91,15 +91,15 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
             plt.style.use('default')
     fig, ax = plt.subplots(figsize=(5, 4.5))
     
-    # Dados
+    # Data
     categories = ['Ecological Route', 'Shortest Route']
     values = [eco_value, short_value]
     colors = ['#1976d2', '#d32f2f']
     
-    # Cria barras
+    # Create bars
     bars = ax.bar(categories, values, color=colors, alpha=0.8, width=0.6)
     
-    # Formatação
+    # Formatting
     ax.set_ylabel(f'{metric_label} ({unit})', fontsize=12, fontweight='bold')
     title = f'{metric_name}'
     if algorithm_name:
@@ -107,11 +107,11 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
     ax.set_title(title, fontsize=12, fontweight='bold', pad=15)
     ax.grid(True, alpha=0.3, linestyle='--', axis='y')
     
-    # Adiciona valores nas barras
+    # Add values on bars
     for bar in bars:
         height = bar.get_height()
         if height > 0:
-            # Formata valores de acordo com a unidade
+            # Format values according to unit
             if unit == 'm':
                 label = f'{height:.0f}'
             elif unit == 'L':
@@ -126,7 +126,7 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
     
     plt.tight_layout()
     
-    # Converte para base64
+    # Convert to base64
     buffer = BytesIO()
     plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
     buffer.seek(0)
@@ -189,7 +189,7 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
     Returns:
         Base64 string of PNG image
     """
-    # Configuração estilo científico
+    # Scientific style configuration
     try:
         plt.style.use('seaborn-v0_8-whitegrid')
     except:
@@ -199,7 +199,7 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
             plt.style.use('default')
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    # Dados
+    # Data
     categories = ['Ecological Route', 'Shortest Route']
     dijkstra_values = [dijkstra_eco, dijkstra_short]
     astar_values = [astar_eco, astar_short]
@@ -207,13 +207,13 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
     x = np.arange(len(categories))
     width = 0.35
     
-    # Cria barras
+    # Create bars
     bars1 = ax.bar(x - width/2, dijkstra_values, width,
                    label='Dijkstra', color='#1976d2', alpha=0.8)
     bars2 = ax.bar(x + width/2, astar_values, width,
                    label='A*', color='#7b1fa2', alpha=0.8)
     
-    # Formatação
+    # Formatting
     ax.set_ylabel(f'{metric_label} ({unit})', fontsize=14, fontweight='bold')
     ax.set_title(f'{metric_name} Comparison: Dijkstra vs A*', fontsize=14, fontweight='bold', pad=20)
     ax.set_xticks(x)
@@ -221,12 +221,12 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
     ax.legend(fontsize=14, loc='upper right')
     ax.grid(True, alpha=0.3, linestyle='--', axis='y')
     
-    # Adiciona valores nas barras
+    # Add values on bars
     for bars in [bars1, bars2]:
         for bar in bars:
             height = bar.get_height()
             if height > 0:
-                # Formata valores de acordo com a unidade
+                # Format values according to unit
                 if unit == 'ms':
                     label = f'{height:.2f}'
                 elif unit == 'm':
@@ -243,7 +243,7 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
     
     plt.tight_layout()
     
-    # Converte para base64
+    # Convert to base64
     buffer = BytesIO()
     plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight', facecolor='white')
     buffer.seek(0)
@@ -266,39 +266,39 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     Returns:
         Path do arquivo HTML gerado
     """
-    # Calcula ambas as rotas
+    # Calculate both routes
     result_short, result_eco = calculate_route_dijkstra(start_addr, dest_addr)
     
-    # Carrega grafo para extrair coordenadas
+    # Load graph to extract coordinates
     G = build_graph_from_csv()
     
-    # Extrai coordenadas das rotas
+    # Extract route coordinates
     coords_eco = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_eco['path_nodes']]
     coords_short = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_short['path_nodes']]
     
     if not coords_eco or not coords_short:
-        raise ValueError("Uma das rotas está vazia, não há coordenadas para desenhar.")
+        raise ValueError("One of the routes is empty, no coordinates to draw.")
     
     key_points_eco = get_key_points(G, result_eco['path_nodes'])
     key_points_short = get_key_points(G, result_short['path_nodes'])
     
-    # Faz reverse geocoding para os pontos-chave (apenas início e fim)
+    # Perform reverse geocoding for key points (only start and end)
     addresses_eco = {}
     for node_id, lat, lon in key_points_eco:
         addresses_eco[node_id] = reverse_geocode(lat, lon)
-        time.sleep(1)  # Rate limiting para Nominatim
+        time.sleep(1)  # Rate limiting for Nominatim
     
     addresses_short = {}
     for node_id, lat, lon in key_points_short:
         addresses_short[node_id] = reverse_geocode(lat, lon)
-        time.sleep(1)  # Rate limiting para Nominatim
+        time.sleep(1)  # Rate limiting for Nominatim
     
-    # Cria os dois mapas
+    # Create the two maps
     m_eco = folium.Map(location=[coords_eco[0][0], coords_eco[0][1]], zoom_start=zoom_start, tiles="CartoDB positron")
     m_short = folium.Map(location=[coords_short[0][0], coords_short[0][1]], zoom_start=zoom_start, tiles="CartoDB positron")
     
-    # ========== MAPA ECOLÓGICO ==========
-    # Desenha rota ecológica
+    # ========== ECOLOGICAL MAP ==========
+    # Draw ecological route
     folium.PolyLine(
         coords_eco, 
         color="blue", 
@@ -307,7 +307,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         tooltip=f"Ecological Route - {result_eco['total_length_m']:.0f}m, {result_eco['total_fuel_liters']:.3f}L"
     ).add_to(m_eco)
     
-    # Adiciona marcadores com endereços (apenas início e fim)
+    # Add markers with addresses (only start and end)
     for node_id, lat, lon in key_points_eco:
         if node_id == result_eco['start_node']:
             icon_color = "green"
@@ -316,7 +316,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             icon_color = "red"
             label = "Destination"
         else:
-            continue  # Pula qualquer outro ponto
+            continue  # Skip any other point
         
         address = addresses_eco.get(node_id, f"Lat: {lat:.6f}, Lon: {lon:.6f}")
         popup_text = f"<b>{label}</b><br>{address}"
@@ -328,8 +328,8 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             popup=folium.Popup(popup_text, max_width=300)
         ).add_to(m_eco)
     
-    # ========== MAPA MAIS CURTO ==========
-    # Desenha rota mais curta
+    # ========== SHORTEST MAP ==========
+    # Draw shortest route
     folium.PolyLine(
         coords_short, 
         color="red", 
@@ -338,7 +338,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         tooltip=f"Shortest Route - {result_short['total_length_m']:.0f}m, {result_short['total_fuel_liters']:.3f}L"
     ).add_to(m_short)
     
-    # Adiciona marcadores com endereços (apenas início e fim)
+    # Add markers with addresses (only start and end)
     for node_id, lat, lon in key_points_short:
         if node_id == result_short['start_node']:
             icon_color = "green"
@@ -347,7 +347,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             icon_color = "red"
             label = "Destination"
         else:
-            continue  # Pula qualquer outro ponto
+            continue  # Skip any other point
         
         address = addresses_short.get(node_id, f"Lat: {lat:.6f}, Lon: {lon:.6f}")
         popup_text = f"<b>{label}</b><br>{address}"
@@ -359,13 +359,13 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             popup=folium.Popup(popup_text, max_width=300)
         ).add_to(m_short)
     
-    # ========== MAPA COMPARATIVO (AMBAS AS ROTAS JUNTAS) ==========
-    # Cria um terceiro mapa com ambas as rotas sobrepostas
+    # ========== COMPARATIVE MAP (BOTH ROUTES TOGETHER) ==========
+    # Create a third map with both routes overlaid
     center_lat = (coords_eco[0][0] + coords_short[0][0]) / 2
     center_lon = (coords_eco[0][1] + coords_short[0][1]) / 2
     m_comparison = folium.Map(location=[center_lat, center_lon], zoom_start=zoom_start, tiles="CartoDB positron")
     
-    # Desenha rota ecológica (azul)
+    # Draw ecological route (blue)
     folium.PolyLine(
         coords_eco, 
         color="blue", 
@@ -374,7 +374,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         tooltip=f"Ecological Route - {result_eco['total_length_m']:.0f}m, {result_eco['total_fuel_liters']:.3f}L"
     ).add_to(m_comparison)
     
-    # Desenha rota mais curta (vermelho)
+    # Draw shortest route (red)
     folium.PolyLine(
         coords_short, 
         color="red", 
@@ -383,7 +383,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         tooltip=f"Shortest Route - {result_short['total_length_m']:.0f}m, {result_short['total_fuel_liters']:.3f}L"
     ).add_to(m_comparison)
     
-    # Adiciona marcadores de início e fim (apenas uma vez)
+    # Add start and end markers (only once)
     folium.Marker(
         coords_eco[0], 
         icon=folium.Icon(color="green"), 
@@ -395,8 +395,8 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         tooltip="Destination"
     ).add_to(m_comparison)
 
-    # ========== CRIA HTML COMBINADO ==========
-    # Salva os mapas temporariamente para obter o HTML completo
+    # ========== CREATE COMBINED HTML ==========
+    # Save maps temporarily to get complete HTML
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp_eco:
         m_eco.save(tmp_eco.name)
         tmp_eco_path = tmp_eco.name
@@ -409,7 +409,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         m_comparison.save(tmp_comparison.name)
         tmp_comparison_path = tmp_comparison.name
     
-    # Lê o HTML completo dos arquivos temporários
+    # Read complete HTML from temporary files
     with open(tmp_eco_path, 'r', encoding='utf-8') as f:
         eco_html = f.read()
     
@@ -419,7 +419,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     with open(tmp_comparison_path, 'r', encoding='utf-8') as f:
         comparison_html = f.read()
     
-    # Remove arquivos temporários
+    # Remove temporary files
     try:
         os.unlink(tmp_eco_path)
         os.unlink(tmp_short_path)
@@ -427,33 +427,33 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     except:
         pass
     
-    # Extrai o conteúdo necessário de cada HTML
-    # Mapa ecológico
+    # Extract necessary content from each HTML
+    # Ecological map
     eco_map_match = re.search(r'<div[^>]*id="map[^"]*"[^>]*>(.*?)</div>\s*</body>', eco_html, re.DOTALL)
     eco_map_id_match = re.search(r'<div[^>]*id="(map[^"]*)"', eco_html)
     eco_map_id = eco_map_id_match.group(1) if eco_map_id_match else "map_eco_temp"
     
-    # Mapa mais curto
+    # Shortest map
     short_map_match = re.search(r'<div[^>]*id="map[^"]*"[^>]*>(.*?)</div>\s*</body>', short_html, re.DOTALL)
     short_map_id_match = re.search(r'<div[^>]*id="(map[^"]*)"', short_html)
     short_map_id = short_map_id_match.group(1) if short_map_id_match else "map_short_temp"
     
-    # Mapa comparativo
+    # Comparative map
     comparison_map_match = re.search(r'<div[^>]*id="map[^"]*"[^>]*>(.*?)</div>\s*</body>', comparison_html, re.DOTALL)
     comparison_map_id_match = re.search(r'<div[^>]*id="(map[^"]*)"', comparison_html)
     comparison_map_id = comparison_map_id_match.group(1) if comparison_map_id_match else "map_comparison_temp"
     
-    # Extrai todos os scripts de todos os mapas
+    # Extract all scripts from all maps
     eco_scripts = re.findall(r'<script[^>]*>.*?</script>', eco_html, re.DOTALL)
     short_scripts = re.findall(r'<script[^>]*>.*?</script>', short_html, re.DOTALL)
     comparison_scripts = re.findall(r'<script[^>]*>.*?</script>', comparison_html, re.DOTALL)
     
-    # Extrai head (CSS, etc) - pega apenas uma vez
+    # Extract head (CSS, etc) - get only once
     head_match = re.search(r'<head>(.*?)</head>', eco_html, re.DOTALL)
     head_content = head_match.group(1) if head_match else ""
     
-    # Cria HTML combinado
-    # Calcula comparação localmente
+    # Create combined HTML
+    # Calculate comparison locally
     comp_dijkstra = {
         'length_diff_m': result_eco['total_length_m'] - result_short['total_length_m'],
         'fuel_diff_liters': result_short['total_fuel_liters'] - result_eco['total_fuel_liters'],
@@ -464,15 +464,15 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     length_diff_dijkstra = comp_dijkstra['length_diff_m']
     time_diff_dijkstra = abs(comp_dijkstra['time_diff_min'])
     
-    # Gera gráficos comparativos de rotas (3 gráficos separados)
+    # Generate comparative route charts (3 separate charts)
     chart_dijkstra_distance, chart_dijkstra_fuel, chart_dijkstra_time = create_route_comparison_charts(result_eco, result_short, "Dijkstra")
     
-    # Prepara o conteúdo dos mapas
+    # Prepare map content
     eco_map_content = eco_map_match.group(1) if eco_map_match else ""
     short_map_content = short_map_match.group(1) if short_map_match else ""
     comparison_map_content = comparison_map_match.group(1) if comparison_map_match else ""
     
-    # Substitui IDs nos scripts para evitar conflitos
+    # Replace IDs in scripts to avoid conflicts
     eco_scripts_clean = []
     for script in eco_scripts:
         script_clean = script.replace(eco_map_id, 'map_eco_leaflet')
@@ -944,7 +944,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
 </body>
 </html>'''
     
-    # Salva o HTML combinado
+    # Save combined HTML
     out = Path(output_html).resolve()
     with open(out, 'w', encoding='utf-8') as f:
         f.write(combined_html)
@@ -954,10 +954,10 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
 
 def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str = "rotas_completo.html", zoom_start: int = 14) -> Path:
     """
-    Renderiza todas as rotas (Dijkstra e A*) em um único arquivo HTML.
-    Reutiliza render_both_routes_to_html e adiciona seção A*.
+    Renders all routes (Dijkstra and A*) in a single HTML file.
+    Reuses render_both_routes_to_html and adds A* section.
     """
-    # Gera HTML do Dijkstra primeiro
+    # Generate Dijkstra HTML first
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp:
         render_both_routes_to_html(start_addr, dest_addr, tmp.name, zoom_start)
         dijkstra_path = tmp.name
@@ -970,20 +970,20 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     except:
         pass
     
-    # Calcula rotas A* e mede tempo total
+    # Calculate A* routes and measure total time
     astar_start_time = time.perf_counter()
     result_eco_astar, result_short_astar = calculate_astar_routes(start_addr, dest_addr)
     astar_total_time = time.perf_counter() - astar_start_time
     
-    # Calcula também Dijkstra para comparação
+    # Also calculate Dijkstra for comparison
     dijkstra_start_time = time.perf_counter()
     result_short_dijkstra, result_eco_dijkstra = calculate_route_dijkstra(start_addr, dest_addr)
     dijkstra_total_time = time.perf_counter() - dijkstra_start_time
     
-    # Carrega grafo para extrair coordenadas
+    # Load graph to extract coordinates
     G = build_graph_from_csv()
     
-    # Cria mapas A* (similar ao que fazemos em render_both_routes_to_html)
+    # Create A* maps (similar to what we do in render_both_routes_to_html)
     coords_eco_astar = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_eco_astar['path_nodes']]
     coords_short_astar = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_short_astar['path_nodes']]
     
@@ -1009,7 +1009,7 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
             folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destination", popup=folium.Popup(f"<b>Destination</b><br>{address}", max_width=300)).add_to(m_eco_astar)
             folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destination", popup=folium.Popup(f"<b>Destination</b><br>{address}", max_width=300)).add_to(m_short_astar)
     
-    # ========== MAPA COMPARATIVO A* (ambas as rotas sobrepostas) ==========
+    # ========== COMPARATIVE A* MAP (both routes overlaid) ==========
     center_lat_astar = (coords_eco_astar[0][0] + coords_short_astar[0][0]) / 2
     center_lon_astar = (coords_eco_astar[0][1] + coords_short_astar[0][1]) / 2
     m_comparison_astar = folium.Map(location=[center_lat_astar, center_lon_astar], zoom_start=zoom_start, tiles="CartoDB positron")
@@ -1019,7 +1019,7 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     folium.Marker(coords_eco_astar[0], icon=folium.Icon(color="green"), tooltip="Start").add_to(m_comparison_astar)
     folium.Marker(coords_eco_astar[-1], icon=folium.Icon(color="red"), tooltip="Destination").add_to(m_comparison_astar)
     
-    # Salva mapas A* temporariamente
+    # Save A* maps temporarily
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp_eco:
         m_eco_astar.save(tmp_eco.name)
         tmp_eco_path = tmp_eco.name
@@ -1046,7 +1046,7 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     except:
         pass
     
-    # Extrai conteúdo dos mapas A*
+    # Extract content from A* maps
     eco_astar_map_match = re.search(r'<div[^>]*id="map[^"]*"[^>]*>(.*?)</div>\s*</body>', eco_astar_html, re.DOTALL)
     eco_astar_map_id_match = re.search(r'<div[^>]*id="(map[^"]*)"', eco_astar_html)
     eco_astar_map_id = eco_astar_map_id_match.group(1) if eco_astar_map_id_match else "map_eco_astar_temp"
@@ -1078,15 +1078,15 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
         'time_diff_min': result_eco_astar['total_time_min'] - result_short_astar['total_time_min'],
     }
     
-    # Ajusta os textos para mostrar valores absolutos quando necessário
+    # Adjust texts to show absolute values when necessary
     fuel_diff_astar = comp_astar['fuel_diff_liters']
     length_diff_astar = comp_astar['length_diff_m']
     time_diff_astar = abs(comp_astar['time_diff_min'])
     
-    # Gera gráficos comparativos de rotas do A* (3 gráficos separados)
+    # Generate comparative route charts for A* (3 separate charts)
     chart_astar_distance, chart_astar_fuel, chart_astar_time = create_route_comparison_charts(result_eco_astar, result_short_astar, "A*")
     
-    # Gera gráfico comparativo de performance entre algoritmos (apenas tempo de execução)
+    # Generate comparative performance chart between algorithms (execution time only)
     chart_execution_time = create_algorithm_comparison_chart(
         "Execution Time", "Time", "ms",
         result_eco_dijkstra.get('execution_time_seconds', 0) * 1000,
@@ -1095,7 +1095,7 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
         result_short_astar.get('execution_time_seconds', 0) * 1000
     )
     
-    # Adiciona seção A* ao HTML do Dijkstra
+    # Add A* section to Dijkstra HTML
     astar_section = f'''
         <!-- SEÇÃO A* -->
         <div class="algorithm-section" style="margin-top: 50px; padding-top: 30px; border-top: 3px solid #1976d2;">
@@ -1310,14 +1310,14 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
         {''.join(comparison_astar_scripts_clean)}
     '''
     
-    # Insere seção A* antes do </body> e atualiza título
+    # Insert A* section before </body> and update title
     combined_html = dijkstra_html.replace('</body>', astar_section + '</body>')
     combined_html = combined_html.replace(
         '<h1>A*</h1>',
         '<h1>DIJKSTRA</h1>'
     )
     
-    # Adiciona CSS para IDs A*
+    # Add CSS for A* IDs
     combined_html = combined_html.replace(
         '#map_eco_leaflet, #map_short_leaflet, #map_comparison_leaflet {',
         '#map_eco_leaflet, #map_short_leaflet, #map_comparison_leaflet, #map_eco_astar_leaflet, #map_short_astar_leaflet, #map_comparison_astar_leaflet {'
