@@ -379,12 +379,16 @@ TIME_WEIGHT = 0.5             # How many "equivalent liters" assigned to 1 extra
 
 ### Algorithm References
 
-- **Dijkstra's Algorithm**: Classic shortest path algorithm
-- **A* Algorithm**: Informed search algorithm with heuristics
+- **Dijkstra's Algorithm**: 
+  - Cormen, T. H., Leiserson, C. E., Rivest, R. L., & Stein, C. (2009). *Introduction to Algorithms* (3rd ed.). MIT Press. Chapter 24: Single-Source Shortest Paths.
+
+- **A* Algorithm**: 
+  - Cormen, T. H., Leiserson, C. E., Rivest, R. L., & Stein, C. (2009). *Introduction to Algorithms* (3rd ed.). MIT Press. (Heuristic search algorithms).
 
 ## License
 
-This project is intended for academic research purposes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 
 ## Contact
 
