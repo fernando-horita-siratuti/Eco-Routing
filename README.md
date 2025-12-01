@@ -2,6 +2,24 @@
 
 A Python-based route optimization system that compares ecological routes (fuel-efficient) versus shortest distance routes using Dijkstra and A* algorithms. The system generates interactive maps and scientific charts comparing route metrics including distance, fuel consumption and travel time.
 
+---
+
+## Table of Contents
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Data Sources](#data-sources)
+- [Basic Usage](#basic-usage)
+- [Adapting for Another City](#adapting-for-another-city)
+- [Project Structure](#project-structure)
+- [Configurable Parameters](#configurable-parameters)
+- [Troubleshooting](#troubleshooting)
+- [References](#references)
+- [License](#license)
+- [Contact Us](#contact-us)
+
+---
+
 ## Features
 
 - **Dual Algorithm Support**: Implements both Dijkstra and A* algorithms for route calculation
