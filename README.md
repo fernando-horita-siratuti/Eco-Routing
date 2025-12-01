@@ -131,6 +131,12 @@ Or from the project root:
 python main/main.py
 ```
 
+If the previous commands do not work, try using:
+
+```bash
+python3 -m main.main
+```
+
 ### What to Expect
 
 1. **First Run**: 
