@@ -11,16 +11,16 @@ if __name__ == "__main__":
     edges_csv = data_dir / "divinopolis_edges.csv"
 
     if nodes_csv.exists() and edges_csv.exists():
-        print("Dados tratados com sucesso.")
+        print("Data processed successfully.")
     else:
-        print("Gerando dados...")
+        print("Generating data...")
         gerar_csvs()
-        print("Dados tratados com sucesso.")
+        print("Data processed successfully.")
 
-    # Exemplo com bairro (opcional, mas mais preciso)
+    # Example with neighborhood (optional, but more precise)
     start_addr = "Rua Pains, 75, Centro, Divinópolis, MG, Brasil"
     dest_addr = "Rua Padre Eustáquio, 716, Santa Rosa, Divinópolis, MG, Brasil"
   
-    print("Renderizando rotas...")
+    print("Rendering routes...")
     render_all_routes_combined(start_addr, dest_addr, output_html="rotas.html")
-    print("Rotas renderizadas com sucesso.")
+    print("Routes rendered successfully.")

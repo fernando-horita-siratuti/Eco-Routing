@@ -66,20 +66,20 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
                                metric_label: str, unit: str, eco_value: float, short_value: float,
                                algorithm_name: str = "") -> str:
     """
-    Cria um gráfico de barras comparativo para uma única métrica.
+    Creates a comparative bar chart for a single metric.
     
     Args:
-        result_eco: Dicionário com dados da rota ecológica
-        result_short: Dicionário com dados da rota mais curta
-        metric_name: Nome da métrica (para título)
-        metric_label: Label para o eixo Y
-        unit: Unidade da métrica
-        eco_value: Valor da rota ecológica
-        short_value: Valor da rota mais curta
-        algorithm_name: Nome do algoritmo (para título)
+        result_eco: Dictionary with ecological route data
+        result_short: Dictionary with shortest route data
+        metric_name: Metric name (for title)
+        metric_label: Label for Y axis
+        unit: Metric unit
+        eco_value: Ecological route value
+        short_value: Shortest route value
+        algorithm_name: Algorithm name (for title)
     
     Returns:
-        String base64 da imagem PNG
+        Base64 string of PNG image
     """
     # Configuração estilo científico
     try:
@@ -92,7 +92,7 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
     fig, ax = plt.subplots(figsize=(5, 4.5))
     
     # Dados
-    categories = ['Rota Ecológica', 'Rota Mais Curta']
+    categories = ['Ecological Route', 'Shortest Route']
     values = [eco_value, short_value]
     colors = ['#1976d2', '#d32f2f']
     
@@ -100,7 +100,7 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
     bars = ax.bar(categories, values, color=colors, alpha=0.8, width=0.6)
     
     # Formatação
-    ax.set_ylabel(f'{metric_label} ({unit})', fontsize=10, fontweight='bold')
+    ax.set_ylabel(f'{metric_label} ({unit})', fontsize=12, fontweight='bold')
     title = f'{metric_name}'
     if algorithm_name:
         title += f' ({algorithm_name})'
@@ -122,7 +122,7 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
                 label = f'{height:.2f}'
             ax.text(bar.get_x() + bar.get_width()/2., height,
                    label,
-                   ha='center', va='bottom', fontsize=9, fontweight='bold')
+                   ha='center', va='bottom', fontsize=14, fontweight='bold')
     
     plt.tight_layout()
     
@@ -137,32 +137,32 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
 
 def create_route_comparison_charts(result_eco: dict, result_short: dict, algorithm_name: str = "") -> tuple:
     """
-    Cria 3 gráficos de barras comparativos separados entre Rota Ecológica e Rota Mais Curta.
+    Creates 3 separate comparative bar charts between Ecological Route and Shortest Route.
     
     Args:
-        result_eco: Dicionário com dados da rota ecológica
-        result_short: Dicionário com dados da rota mais curta
-        algorithm_name: Nome do algoritmo (para título)
+        result_eco: Dictionary with ecological route data
+        result_short: Dictionary with shortest route data
+        algorithm_name: Algorithm name (for title)
     
     Returns:
-        Tupla com 3 strings base64 (distância, combustível, tempo)
+        Tuple with 3 base64 strings (distance, fuel, time)
     """
     chart_distance = create_single_metric_chart(
-        result_eco, result_short, 'Distância', 'Distância', 'm',
+        result_eco, result_short, 'Distance', 'Distance', 'm',
         result_eco.get('total_length_m', 0),
         result_short.get('total_length_m', 0),
         algorithm_name
     )
     
     chart_fuel = create_single_metric_chart(
-        result_eco, result_short, 'Consumo de Combustível', 'Combustível', 'L',
+        result_eco, result_short, 'Fuel Consumption', 'Fuel', 'L',
         result_eco.get('total_fuel_liters', 0),
         result_short.get('total_fuel_liters', 0),
         algorithm_name
     )
     
     chart_time = create_single_metric_chart(
-        result_eco, result_short, 'Tempo de Viagem', 'Tempo de Viagem', 'min',
+        result_eco, result_short, 'Travel Time', 'Travel Time', 'min',
         result_eco.get('total_time_min', 0),
         result_short.get('total_time_min', 0),
         algorithm_name
@@ -175,19 +175,19 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
                                      dijkstra_eco: float, dijkstra_short: float,
                                      astar_eco: float, astar_short: float) -> str:
     """
-    Cria gráfico de barras comparativo entre algoritmos Dijkstra e A*.
+    Creates a comparative bar chart between Dijkstra and A* algorithms.
     
     Args:
-        metric_name: Nome da métrica (para título)
-        metric_label: Label para o eixo Y
-        unit: Unidade da métrica
-        dijkstra_eco: Valor da rota ecológica do Dijkstra
-        dijkstra_short: Valor da rota mais curta do Dijkstra
-        astar_eco: Valor da rota ecológica do A*
-        astar_short: Valor da rota mais curta do A*
+        metric_name: Metric name (for title)
+        metric_label: Label for Y axis
+        unit: Metric unit
+        dijkstra_eco: Dijkstra ecological route value
+        dijkstra_short: Dijkstra shortest route value
+        astar_eco: A* ecological route value
+        astar_short: A* shortest route value
     
     Returns:
-        String base64 da imagem PNG
+        Base64 string of PNG image
     """
     # Configuração estilo científico
     try:
@@ -200,7 +200,7 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
     fig, ax = plt.subplots(figsize=(10, 6))
     
     # Dados
-    categories = ['Rota Ecológica', 'Rota Mais Curta']
+    categories = ['Ecological Route', 'Shortest Route']
     dijkstra_values = [dijkstra_eco, dijkstra_short]
     astar_values = [astar_eco, astar_short]
     
@@ -214,11 +214,11 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
                    label='A*', color='#7b1fa2', alpha=0.8)
     
     # Formatação
-    ax.set_ylabel(f'{metric_label} ({unit})', fontsize=12, fontweight='bold')
-    ax.set_title(f'Comparação {metric_name}: Dijkstra vs A*', fontsize=14, fontweight='bold', pad=20)
+    ax.set_ylabel(f'{metric_label} ({unit})', fontsize=14, fontweight='bold')
+    ax.set_title(f'{metric_name} Comparison: Dijkstra vs A*', fontsize=14, fontweight='bold', pad=20)
     ax.set_xticks(x)
-    ax.set_xticklabels(categories, fontsize=11)
-    ax.legend(fontsize=11, loc='upper right')
+    ax.set_xticklabels(categories, fontsize=14)
+    ax.legend(fontsize=14, loc='upper right')
     ax.grid(True, alpha=0.3, linestyle='--', axis='y')
     
     # Adiciona valores nas barras
@@ -239,7 +239,7 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
                     label = f'{height:.2f}'
                 ax.text(bar.get_x() + bar.get_width()/2., height,
                        label,
-                       ha='center', va='bottom', fontsize=9, fontweight='bold')
+                       ha='center', va='bottom', fontsize=14, fontweight='bold')
     
     plt.tight_layout()
     
@@ -304,17 +304,17 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         color="blue", 
         weight=5, 
         opacity=0.8,
-        tooltip=f"Rota Ecológica - {result_eco['total_length_m']:.0f}m, {result_eco['total_fuel_liters']:.3f}L"
+        tooltip=f"Ecological Route - {result_eco['total_length_m']:.0f}m, {result_eco['total_fuel_liters']:.3f}L"
     ).add_to(m_eco)
     
     # Adiciona marcadores com endereços (apenas início e fim)
     for node_id, lat, lon in key_points_eco:
         if node_id == result_eco['start_node']:
             icon_color = "green"
-            label = "Início"
+            label = "Start"
         elif node_id == result_eco['end_node']:
             icon_color = "red"
-            label = "Destino"
+            label = "Destination"
         else:
             continue  # Pula qualquer outro ponto
         
@@ -335,17 +335,17 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         color="red", 
         weight=5, 
         opacity=0.8,
-        tooltip=f"Rota Mais Curta - {result_short['total_length_m']:.0f}m, {result_short['total_fuel_liters']:.3f}L"
+        tooltip=f"Shortest Route - {result_short['total_length_m']:.0f}m, {result_short['total_fuel_liters']:.3f}L"
     ).add_to(m_short)
     
     # Adiciona marcadores com endereços (apenas início e fim)
     for node_id, lat, lon in key_points_short:
         if node_id == result_short['start_node']:
             icon_color = "green"
-            label = "Início"
+            label = "Start"
         elif node_id == result_short['end_node']:
             icon_color = "red"
-            label = "Destino"
+            label = "Destination"
         else:
             continue  # Pula qualquer outro ponto
         
@@ -371,7 +371,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         color="blue", 
         weight=5, 
         opacity=0.8,
-        tooltip=f"Rota Ecológica - {result_eco['total_length_m']:.0f}m, {result_eco['total_fuel_liters']:.3f}L"
+        tooltip=f"Ecological Route - {result_eco['total_length_m']:.0f}m, {result_eco['total_fuel_liters']:.3f}L"
     ).add_to(m_comparison)
     
     # Desenha rota mais curta (vermelho)
@@ -380,19 +380,19 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         color="red", 
         weight=5, 
         opacity=0.8,
-        tooltip=f"Rota Mais Curta - {result_short['total_length_m']:.0f}m, {result_short['total_fuel_liters']:.3f}L"
+        tooltip=f"Shortest Route - {result_short['total_length_m']:.0f}m, {result_short['total_fuel_liters']:.3f}L"
     ).add_to(m_comparison)
     
     # Adiciona marcadores de início e fim (apenas uma vez)
     folium.Marker(
         coords_eco[0], 
         icon=folium.Icon(color="green"), 
-        tooltip="Início"
+        tooltip="Start"
     ).add_to(m_comparison)
     folium.Marker(
         coords_eco[-1], 
         icon=folium.Icon(color="red"), 
-        tooltip="Destino"
+        tooltip="Destination"
     ).add_to(m_comparison)
 
     # ========== CRIA HTML COMBINADO ==========
@@ -494,7 +494,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <title>Rota Ecológica vs Rota Mais Curta</title>
+    <title>Ecological Route vs Shortest Route</title>
     {head_content}
     <style>
         * {{
@@ -811,7 +811,7 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
         <div class="maps-section">
             <div class="map-card">
                 <div class="map-card-header">
-                    <h2>Rota Ecológica</h2>
+                    <h2>Ecological Route</h2>
                 </div>
                 <div class="map-container">
                     <div class="map" id="map_eco">
@@ -821,28 +821,28 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
                     </div>
                 </div>
                 <div class="map-info">
-                    <h3>Informações da Rota</h3>
+                    <h3>Route Information</h3>
                     <div class="metric">
-                        <span class="metric-label">Distância Total:</span>
-                        <span class="metric-value">{result_eco['total_length_m']:.1f} metros</span>
+                        <span class="metric-label">Total Distance:</span>
+                        <span class="metric-value">{result_eco['total_length_m']:.1f} meters</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">Tempo Estimado:</span>
-                        <span class="metric-value">{result_eco['total_time_min']:.1f} minutos</span>
+                        <span class="metric-label">Estimated Time:</span>
+                        <span class="metric-value">{result_eco['total_time_min']:.1f} minutes</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">Consumo de Combustível:</span>
-                        <span class="metric-value">{result_eco['total_fuel_liters']:.3f} litros</span>
+                        <span class="metric-label">Fuel Consumption:</span>
+                        <span class="metric-value">{result_eco['total_fuel_liters']:.3f} liters</span>
                     </div>
                     <p style="margin-top: 15px; font-style: italic; color: #666;">
-                        Esta rota foi otimizada para minimizar o consumo de combustível, considerando fatores como inclinação do terreno e velocidade das vias.
+                        This route was optimized to minimize fuel consumption, considering factors such as terrain slope and road speed limits.
                     </p>
                 </div>
             </div>
             
             <div class="map-card">
                 <div class="map-card-header">
-                    <h2>Rota Mais Curta</h2>
+                    <h2>Shortest Route</h2>
                 </div>
                 <div class="map-container">
                     <div class="map" id="map_short">
@@ -852,28 +852,28 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
                     </div>
                 </div>
                 <div class="map-info">
-                    <h3>Informações da Rota</h3>
+                    <h3>Route Information</h3>
                     <div class="metric">
-                        <span class="metric-label">Distância Total:</span>
-                        <span class="metric-value">{result_short['total_length_m']:.1f} metros</span>
+                        <span class="metric-label">Total Distance:</span>
+                        <span class="metric-value">{result_short['total_length_m']:.1f} meters</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">Tempo Estimado:</span>
-                        <span class="metric-value">{result_short['total_time_min']:.1f} minutos</span>
+                        <span class="metric-label">Estimated Time:</span>
+                        <span class="metric-value">{result_short['total_time_min']:.1f} minutes</span>
                     </div>
                     <div class="metric">
-                        <span class="metric-label">Consumo de Combustível:</span>
-                        <span class="metric-value">{result_short['total_fuel_liters']:.3f} litros</span>
+                        <span class="metric-label">Fuel Consumption:</span>
+                        <span class="metric-value">{result_short['total_fuel_liters']:.3f} liters</span>
                     </div>
                     <p style="margin-top: 15px; font-style: italic; color: #666;">
-                        Esta rota prioriza a menor distância possível entre os pontos de origem e destino.
+                        This route prioritizes the shortest possible distance between origin and destination points.
                     </p>
                 </div>
             </div>
         </div>
         
         <div class="comparison-map-section">
-            <h2>Comparação Visual das Rotas</h2>
+            <h2>Visual Route Comparison</h2>
             <div class="comparison-map-container">
                 <div class="map" id="map_comparison">
                     <div id="map_comparison_leaflet">
@@ -881,58 +881,58 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
                     </div>
                 </div>
                 <div class="comparison-legend">
-                    <h3>Legenda</h3>
+                    <h3>Legend</h3>
                     <div class="comparison-legend-item">
                         <div class="comparison-legend-color eco"></div>
-                        <span>Rota Ecológica</span>
+                        <span>Ecological Route</span>
                     </div>
                     <div class="comparison-legend-item">
                         <div class="comparison-legend-color short"></div>
-                        <span>Rota Mais Curta</span>
+                        <span>Shortest Route</span>
                     </div>
                 </div>
             </div>
         </div>
         
         <div class="analysis-section">
-            <h2>Análise Comparativa: Vantagens e Desvantagens</h2>
+            <h2>Comparative Analysis: Advantages and Disadvantages</h2>
             <div class="analysis-content">
                 <div class="analysis-box eco">
-                    <h3>Rota Ecológica</h3>
+                    <h3>Ecological Route</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor consumo de combustível ({fuel_diff_dijkstra:+.3f}L de diferença)</li>
-                        <li><span class="advantage">✓ Vantagem:</span> {'Menor tempo de viagem' if comp_dijkstra['time_diff_min'] < 0 else 'Tempo similar'}</li>
-                        <li><span class="advantage">✓ Vantagem:</span> Mais sustentável e econômica a longo prazo</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Distância ligeiramente maior' if comp_dijkstra['length_diff_m'] > 0 else 'Distância similar'} ({length_diff_dijkstra:+.1f}m)</li>
+                        <li><span class="advantage">✓ Advantage:</span> Lower fuel consumption ({fuel_diff_dijkstra:+.3f}L difference)</li>
+                        <li><span class="advantage">✓ Advantage:</span> {'Shorter travel time' if comp_dijkstra['time_diff_min'] < 0 else 'Similar time'}</li>
+                        <li><span class="advantage">✓ Advantage:</span> More sustainable and economical in the long term</li>
+                        <li><span class="disadvantage">✗ Disadvantage:</span> {'Slightly longer distance' if comp_dijkstra['length_diff_m'] > 0 else 'Similar distance'} ({length_diff_dijkstra:+.1f}m)</li>
                     </ul>
                 </div>
                 
                 <div class="analysis-box short">
-                    <h3>Rota Mais Curta</h3>
+                    <h3>Shortest Route</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor distância percorrida ({length_diff_dijkstra:+.1f}m de diferença)</li>
-                        <li><span class="advantage">✓ Vantagem:</span> Caminho mais direto entre origem e destino</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> Maior consumo de combustível ({fuel_diff_dijkstra:+.3f}L a mais)</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Tempo de viagem maior' if comp_dijkstra['time_diff_min'] > 0 else 'Tempo similar'} ({time_diff_dijkstra:+.1f} min)</li>
+                        <li><span class="advantage">✓ Advantage:</span> Shorter distance traveled ({length_diff_dijkstra:+.1f}m difference)</li>
+                        <li><span class="advantage">✓ Advantage:</span> More direct path between origin and destination</li>
+                        <li><span class="disadvantage">✗ Disadvantage:</span> Higher fuel consumption ({fuel_diff_dijkstra:+.3f}L more)</li>
+                        <li><span class="disadvantage">✗ Disadvantage:</span> {'Longer travel time' if comp_dijkstra['time_diff_min'] > 0 else 'Similar time'} ({time_diff_dijkstra:+.1f} min)</li>
                     </ul>
                 </div>
             </div>
         </div>
         
         <div class="chart-section">
-            <h3>Comparação Visual: Rota Ecológica vs Rota Mais Curta (Dijkstra)</h3>
+            <h3>Visual Comparison: Ecological Route vs Shortest Route (Dijkstra)</h3>
             <div class="charts-grid">
                 <div class="chart-item">
-                    <h4>Distância</h4>
-                    <img src="{chart_dijkstra_distance}" alt="Gráfico Distância Dijkstra" style="width: 100%; border-radius: 8px;">
+                    <h4>Distance</h4>
+                    <img src="{chart_dijkstra_distance}" alt="Dijkstra Distance Chart" style="width: 100%; border-radius: 8px;">
                 </div>
                 <div class="chart-item">
-                    <h4>Consumo de Combustível</h4>
-                    <img src="{chart_dijkstra_fuel}" alt="Gráfico Combustível Dijkstra" style="width: 100%; border-radius: 8px;">
+                    <h4>Fuel Consumption</h4>
+                    <img src="{chart_dijkstra_fuel}" alt="Dijkstra Fuel Chart" style="width: 100%; border-radius: 8px;">
                 </div>
                 <div class="chart-item">
-                    <h4>Tempo de Viagem</h4>
-                    <img src="{chart_dijkstra_time}" alt="Gráfico Tempo Dijkstra" style="width: 100%; border-radius: 8px;">
+                    <h4>Travel Time</h4>
+                    <img src="{chart_dijkstra_time}" alt="Dijkstra Time Chart" style="width: 100%; border-radius: 8px;">
                 </div>
             </div>
         </div>
@@ -996,28 +996,28 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
         addresses_astar[node_id] = reverse_geocode(lat, lon)
         time.sleep(1)
     
-    folium.PolyLine(coords_eco_astar, color="blue", weight=5, opacity=0.8, tooltip=f"Rota Ecológica A* - {result_eco_astar['total_length_m']:.0f}m").add_to(m_eco_astar)
-    folium.PolyLine(coords_short_astar, color="red", weight=5, opacity=0.8, tooltip=f"Rota Mais Curta A* - {result_short_astar['total_length_m']:.0f}m").add_to(m_short_astar)
+    folium.PolyLine(coords_eco_astar, color="blue", weight=5, opacity=0.8, tooltip=f"Ecological Route A* - {result_eco_astar['total_length_m']:.0f}m").add_to(m_eco_astar)
+    folium.PolyLine(coords_short_astar, color="red", weight=5, opacity=0.8, tooltip=f"Shortest Route A* - {result_short_astar['total_length_m']:.0f}m").add_to(m_short_astar)
     
     for node_id, lat, lon in key_points_astar:
         if node_id == result_eco_astar['start_node']:
             address = addresses_astar.get(node_id, f"Lat: {lat:.6f}, Lon: {lon:.6f}")
-            folium.Marker((lat, lon), icon=folium.Icon(color="green"), tooltip="Início", popup=folium.Popup(f"<b>Início</b><br>{address}", max_width=300)).add_to(m_eco_astar)
-            folium.Marker((lat, lon), icon=folium.Icon(color="green"), tooltip="Início", popup=folium.Popup(f"<b>Início</b><br>{address}", max_width=300)).add_to(m_short_astar)
+            folium.Marker((lat, lon), icon=folium.Icon(color="green"), tooltip="Start", popup=folium.Popup(f"<b>Start</b><br>{address}", max_width=300)).add_to(m_eco_astar)
+            folium.Marker((lat, lon), icon=folium.Icon(color="green"), tooltip="Start", popup=folium.Popup(f"<b>Start</b><br>{address}", max_width=300)).add_to(m_short_astar)
         elif node_id == result_eco_astar['end_node']:
             address = addresses_astar.get(node_id, f"Lat: {lat:.6f}, Lon: {lon:.6f}")
-            folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destino", popup=folium.Popup(f"<b>Destino</b><br>{address}", max_width=300)).add_to(m_eco_astar)
-            folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destino", popup=folium.Popup(f"<b>Destino</b><br>{address}", max_width=300)).add_to(m_short_astar)
+            folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destination", popup=folium.Popup(f"<b>Destination</b><br>{address}", max_width=300)).add_to(m_eco_astar)
+            folium.Marker((lat, lon), icon=folium.Icon(color="red"), tooltip="Destination", popup=folium.Popup(f"<b>Destination</b><br>{address}", max_width=300)).add_to(m_short_astar)
     
     # ========== MAPA COMPARATIVO A* (ambas as rotas sobrepostas) ==========
     center_lat_astar = (coords_eco_astar[0][0] + coords_short_astar[0][0]) / 2
     center_lon_astar = (coords_eco_astar[0][1] + coords_short_astar[0][1]) / 2
     m_comparison_astar = folium.Map(location=[center_lat_astar, center_lon_astar], zoom_start=zoom_start, tiles="CartoDB positron")
     
-    folium.PolyLine(coords_eco_astar, color="blue", weight=5, opacity=0.8, tooltip="Rota Ecológica A*").add_to(m_comparison_astar)
-    folium.PolyLine(coords_short_astar, color="red", weight=5, opacity=0.8, tooltip="Rota Mais Curta A*").add_to(m_comparison_astar)
-    folium.Marker(coords_eco_astar[0], icon=folium.Icon(color="green"), tooltip="Início").add_to(m_comparison_astar)
-    folium.Marker(coords_eco_astar[-1], icon=folium.Icon(color="red"), tooltip="Destino").add_to(m_comparison_astar)
+    folium.PolyLine(coords_eco_astar, color="blue", weight=5, opacity=0.8, tooltip="Ecological Route A*").add_to(m_comparison_astar)
+    folium.PolyLine(coords_short_astar, color="red", weight=5, opacity=0.8, tooltip="Shortest Route A*").add_to(m_comparison_astar)
+    folium.Marker(coords_eco_astar[0], icon=folium.Icon(color="green"), tooltip="Start").add_to(m_comparison_astar)
+    folium.Marker(coords_eco_astar[-1], icon=folium.Icon(color="red"), tooltip="Destination").add_to(m_comparison_astar)
     
     # Salva mapas A* temporariamente
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as tmp_eco:
@@ -1071,7 +1071,7 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     short_astar_scripts_clean = [s.replace(short_astar_map_id, 'map_short_astar_leaflet') for s in short_astar_scripts]
     comparison_astar_scripts_clean = [s.replace(comparison_astar_map_id, 'map_comparison_astar_leaflet') for s in comparison_astar_scripts]
     
-    # Comparação entre as rotas A* (ecológica vs mais curta) - mesma estrutura do Dijkstra
+    # Comparison between A* routes (ecological vs shortest) - same structure as Dijkstra
     comp_astar = {
         'length_diff_m': result_eco_astar['total_length_m'] - result_short_astar['total_length_m'],
         'fuel_diff_liters': result_short_astar['total_fuel_liters'] - result_eco_astar['total_fuel_liters'],
@@ -1088,7 +1088,7 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     
     # Gera gráfico comparativo de performance entre algoritmos (apenas tempo de execução)
     chart_execution_time = create_algorithm_comparison_chart(
-        "Tempo de Execução", "Tempo", "ms",
+        "Execution Time", "Time", "ms",
         result_eco_dijkstra.get('execution_time_seconds', 0) * 1000,
         result_short_dijkstra.get('execution_time_seconds', 0) * 1000,
         result_eco_astar.get('execution_time_seconds', 0) * 1000,
@@ -1100,12 +1100,12 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
         <!-- SEÇÃO A* -->
         <div class="algorithm-section" style="margin-top: 50px; padding-top: 30px; border-top: 3px solid #1976d2;">
             <div class="main-content">
-                <h2 style="font-size: 28px; font-weight: 600; color: #333; text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">Algoritmo A*</h2>
+                <h2 style="font-size: 28px; font-weight: 600; color: #333; text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">A* Algorithm</h2>
                 
                 <div class="maps-section">
                 <div class="map-card">
                     <div class="map-card-header">
-                        <h2>Rota Ecológica A*</h2>
+                        <h2>Ecological Route A*</h2>
                     </div>
                     <div class="map-container">
                         <div class="map" id="map_eco_astar">
@@ -1115,25 +1115,25 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                         </div>
                     </div>
                     <div class="map-info">
-                        <h3>Informações da Rota</h3>
+                        <h3>Route Information</h3>
                         <div class="metric">
-                            <span class="metric-label">Distância Total:</span>
-                            <span class="metric-value">{result_eco_astar['total_length_m']:.1f} metros</span>
+                            <span class="metric-label">Total Distance:</span>
+                            <span class="metric-value">{result_eco_astar['total_length_m']:.1f} meters</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Tempo Estimado:</span>
-                            <span class="metric-value">{result_eco_astar['total_time_min']:.1f} minutos</span>
+                            <span class="metric-label">Estimated Time:</span>
+                            <span class="metric-value">{result_eco_astar['total_time_min']:.1f} minutes</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Consumo de Combustível:</span>
-                            <span class="metric-value">{result_eco_astar['total_fuel_liters']:.3f} litros</span>
+                            <span class="metric-label">Fuel Consumption:</span>
+                            <span class="metric-value">{result_eco_astar['total_fuel_liters']:.3f} liters</span>
                         </div>
                     </div>
                 </div>
                 
                 <div class="map-card">
                     <div class="map-card-header">
-                        <h2>Rota Mais Curta A*</h2>
+                        <h2>Shortest Route A*</h2>
                     </div>
                     <div class="map-container">
                         <div class="map" id="map_short_astar">
@@ -1143,25 +1143,25 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                         </div>
                     </div>
                     <div class="map-info">
-                        <h3>Informações da Rota</h3>
+                        <h3>Route Information</h3>
                         <div class="metric">
-                            <span class="metric-label">Distância Total:</span>
-                            <span class="metric-value">{result_short_astar['total_length_m']:.1f} metros</span>
+                            <span class="metric-label">Total Distance:</span>
+                            <span class="metric-value">{result_short_astar['total_length_m']:.1f} meters</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Tempo Estimado:</span>
-                            <span class="metric-value">{result_short_astar['total_time_min']:.1f} minutos</span>
+                            <span class="metric-label">Estimated Time:</span>
+                            <span class="metric-value">{result_short_astar['total_time_min']:.1f} minutes</span>
                         </div>
                         <div class="metric">
-                            <span class="metric-label">Consumo de Combustível:</span>
-                            <span class="metric-value">{result_short_astar['total_fuel_liters']:.3f} litros</span>
+                            <span class="metric-label">Fuel Consumption:</span>
+                            <span class="metric-value">{result_short_astar['total_fuel_liters']:.3f} liters</span>
                         </div>
                     </div>
                 </div>
                 </div>
                 
                 <div class="comparison-map-section">
-                    <h2>Comparação Visual das Rotas (A*)</h2>
+                    <h2>Visual Route Comparison (A*)</h2>
                     <div class="comparison-map-container">
                         <div class="map" id="map_comparison_astar">
                             <div id="map_comparison_astar_leaflet">
@@ -1169,14 +1169,14 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                             </div>
                         </div>
                         <div class="comparison-legend">
-                            <h3>Legenda</h3>
+                            <h3>Legend</h3>
                             <div class="comparison-legend-item">
                                 <div class="comparison-legend-color eco"></div>
-                                <span>Rota Ecológica</span>
+                                <span>Ecological Route</span>
                             </div>
                             <div class="comparison-legend-item">
                                 <div class="comparison-legend-color short"></div>
-                                <span>Rota Mais Curta</span>
+                                <span>Shortest Route</span>
                             </div>
                         </div>
                     </div>
@@ -1184,44 +1184,44 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                 
                 <!-- ANÁLISE COMPARATIVA DAS ROTAS A* -->
                 <div class="analysis-section">
-                    <h2>Análise Comparativa: Vantagens e Desvantagens (A*)</h2>
+                    <h2>Comparative Analysis: Advantages and Disadvantages (A*)</h2>
                     <div class="analysis-content">
                         <div class="analysis-box eco">
-                    <h3>Rota Ecológica A*</h3>
+                    <h3>Ecological Route A*</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor consumo de combustível ({fuel_diff_astar:+.3f}L de diferença)</li>
-                        <li><span class="advantage">✓ Vantagem:</span> {'Menor tempo de viagem' if comp_astar['time_diff_min'] < 0 else 'Tempo similar'}</li>
-                        <li><span class="advantage">✓ Vantagem:</span> Mais sustentável e econômica a longo prazo</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Distância ligeiramente maior' if comp_astar['length_diff_m'] > 0 else 'Distância similar'} ({length_diff_astar:+.1f}m)</li>
+                        <li><span class="advantage">✓ Advantage:</span> Lower fuel consumption ({fuel_diff_astar:+.3f}L difference)</li>
+                        <li><span class="advantage">✓ Advantage:</span> {'Shorter travel time' if comp_astar['time_diff_min'] < 0 else 'Similar time'}</li>
+                        <li><span class="advantage">✓ Advantage:</span> More sustainable and economical in the long term</li>
+                        <li><span class="disadvantage">✗ Disadvantage:</span> {'Slightly longer distance' if comp_astar['length_diff_m'] > 0 else 'Similar distance'} ({length_diff_astar:+.1f}m)</li>
                     </ul>
                 </div>
                 
                 <div class="analysis-box short">
-                    <h3>Rota Mais Curta A*</h3>
+                    <h3>Shortest Route A*</h3>
                     <ul>
-                        <li><span class="advantage">✓ Vantagem:</span> Menor distância percorrida ({length_diff_astar:+.1f}m de diferença)</li>
-                        <li><span class="advantage">✓ Vantagem:</span> Caminho mais direto entre origem e destino</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> Maior consumo de combustível ({fuel_diff_astar:+.3f}L a mais)</li>
-                        <li><span class="disadvantage">✗ Desvantagem:</span> {'Tempo de viagem maior' if comp_astar['time_diff_min'] < 0 else 'Tempo similar'} ({time_diff_astar:+.1f} min)</li>
+                        <li><span class="advantage">✓ Advantage:</span> Shorter distance traveled ({length_diff_astar:+.1f}m difference)</li>
+                        <li><span class="advantage">✓ Advantage:</span> More direct path between origin and destination</li>
+                        <li><span class="disadvantage">✗ Disadvantage:</span> Higher fuel consumption ({fuel_diff_astar:+.3f}L more)</li>
+                        <li><span class="disadvantage">✗ Disadvantage:</span> {'Longer travel time' if comp_astar['time_diff_min'] < 0 else 'Similar time'} ({time_diff_astar:+.1f} min)</li>
                     </ul>
                         </div>
                     </div>
                 </div>
                 
                 <div class="chart-section">
-                    <h3>Comparação Visual: Rota Ecológica vs Rota Mais Curta (A*)</h3>
+                    <h3>Visual Comparison: Ecological Route vs Shortest Route (A*)</h3>
                     <div class="charts-grid">
                         <div class="chart-item">
-                            <h4>Distância</h4>
-                            <img src="{chart_astar_distance}" alt="Gráfico Distância A*" style="width: 100%; border-radius: 8px;">
+                            <h4>Distance</h4>
+                            <img src="{chart_astar_distance}" alt="A* Distance Chart" style="width: 100%; border-radius: 8px;">
                         </div>
                         <div class="chart-item">
-                            <h4>Consumo de Combustível</h4>
-                            <img src="{chart_astar_fuel}" alt="Gráfico Combustível A*" style="width: 100%; border-radius: 8px;">
+                            <h4>Fuel Consumption</h4>
+                            <img src="{chart_astar_fuel}" alt="A* Fuel Chart" style="width: 100%; border-radius: 8px;">
                         </div>
                         <div class="chart-item">
-                            <h4>Tempo de Viagem</h4>
-                            <img src="{chart_astar_time}" alt="Gráfico Tempo A*" style="width: 100%; border-radius: 8px;">
+                            <h4>Travel Time</h4>
+                            <img src="{chart_astar_time}" alt="A* Time Chart" style="width: 100%; border-radius: 8px;">
                         </div>
                     </div>
                 </div>
@@ -1231,65 +1231,65 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
         <!-- COMPARAÇÃO DE PERFORMANCE: DIJKSTRA vs A* -->
         <div class="performance-section" style="margin-top: 50px; padding-top: 30px; border-top: 3px solid #9c27b0;">
             <div class="main-content">
-                <h2 style="font-size: 28px; font-weight: 600; color: #333; text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">Comparação de Performance dos Algoritmos</h2>
+                <h2 style="font-size: 28px; font-weight: 600; color: #333; text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">Algorithm Performance Comparison</h2>
             
             <div class="performance-content" style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px;">
                 <div class="performance-box" style="padding: 25px; border-radius: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #2196f3; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                    <h3 style="margin: 0 0 15px 0; font-size: 22px; font-weight: 600; color: #1976d2;">Algoritmo Dijkstra</h3>
+                    <h3 style="margin: 0 0 15px 0; font-size: 22px; font-weight: 600; color: #1976d2;">Dijkstra Algorithm</h3>
                     <div class="performance-metric" style="margin-bottom: 12px;">
-                        <span style="font-weight: 500; color: #666;">Tempo Total de Execução:</span>
+                        <span style="font-weight: 500; color: #666;">Total Execution Time:</span>
                         <span style="font-weight: 700; color: #1976d2; font-size: 18px; margin-left: 10px;">{dijkstra_total_time*1000:.2f} ms</span>
                     </div>
                     <div class="performance-metric" style="margin-bottom: 12px;">
-                        <span style="font-weight: 500; color: #666;">Rota Ecológica:</span>
+                        <span style="font-weight: 500; color: #666;">Ecological Route:</span>
                         <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_eco_dijkstra.get('execution_time_seconds', 0)*1000:.2f} ms</span>
                     </div>
                     <div class="performance-metric" style="margin-bottom: 12px;">
-                        <span style="font-weight: 500; color: #666;">Rota Mais Curta:</span>
+                        <span style="font-weight: 500; color: #666;">Shortest Route:</span>
                         <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_short_dijkstra.get('execution_time_seconds', 0)*1000:.2f} ms</span>
                     </div>
                     <p style="margin-top: 15px; font-style: italic; color: #555; font-size: 14px;">
-                        Algoritmo clássico de busca em grafos, explora todos os caminhos possíveis até encontrar o ótimo.
+                        Classic graph search algorithm that explores all possible paths until finding the optimal solution.
                     </p>
                 </div>
                 
                 <div class="performance-box" style="padding: 25px; border-radius: 12px; background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border: 2px solid #9c27b0; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                    <h3 style="margin: 0 0 15px 0; font-size: 22px; font-weight: 600; color: #7b1fa2;">Algoritmo A*</h3>
+                    <h3 style="margin: 0 0 15px 0; font-size: 22px; font-weight: 600; color: #7b1fa2;">A* Algorithm</h3>
                     <div class="performance-metric" style="margin-bottom: 12px;">
-                        <span style="font-weight: 500; color: #666;">Tempo Total de Execução:</span>
+                        <span style="font-weight: 500; color: #666;">Total Execution Time:</span>
                         <span style="font-weight: 700; color: #7b1fa2; font-size: 18px; margin-left: 10px;">{astar_total_time*1000:.2f} ms</span>
                     </div>
                     <div class="performance-metric" style="margin-bottom: 12px;">
-                        <span style="font-weight: 500; color: #666;">Rota Ecológica:</span>
+                        <span style="font-weight: 500; color: #666;">Ecological Route:</span>
                         <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_eco_astar.get('execution_time_seconds', 0)*1000:.2f} ms</span>
                     </div>
                     <div class="performance-metric" style="margin-bottom: 12px;">
-                        <span style="font-weight: 500; color: #666;">Rota Mais Curta:</span>
+                        <span style="font-weight: 500; color: #666;">Shortest Route:</span>
                         <span style="font-weight: 600; color: #333; margin-left: 10px;">{result_short_astar.get('execution_time_seconds', 0)*1000:.2f} ms</span>
                     </div>
                     <p style="margin-top: 15px; font-style: italic; color: #555; font-size: 14px;">
-                        Algoritmo heurístico que usa informações sobre o destino para otimizar a busca.
+                        Heuristic algorithm that uses information about the destination to optimize the search.
                     </p>
                 </div>
             </div>
             
             <div class="performance-comparison" style="margin-top: 30px; padding: 25px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-                <h3 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600; color: #333; text-align: center;">Análise de Performance</h3>
+                <h3 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600; color: #333; text-align: center;">Performance Analysis</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div>
-                        <h4 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #1976d2;">Diferença de Tempo:</h4>
+                        <h4 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #1976d2;">Time Difference:</h4>
                         <p style="margin: 0; color: #555; font-size: 15px;">
-                            {'A* foi' if astar_total_time < dijkstra_total_time else 'Dijkstra foi'} 
+                            {'A* was' if astar_total_time < dijkstra_total_time else 'Dijkstra was'} 
                             <strong style="color: #1976d2;">{abs((astar_total_time - dijkstra_total_time) / max(dijkstra_total_time, 0.0001) * 100):.1f}%</strong>
-                            {'mais rápido' if astar_total_time < dijkstra_total_time else 'mais rápido'}
-                            ({abs(astar_total_time - dijkstra_total_time)*1000:.2f} ms de diferença)
+                            {'faster' if astar_total_time < dijkstra_total_time else 'faster'}
+                            ({abs(astar_total_time - dijkstra_total_time)*1000:.2f} ms difference)
                         </p>
                     </div>
                     <div>
-                        <h4 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #7b1fa2;">Eficiência:</h4>
+                        <h4 style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600; color: #7b1fa2;">Efficiency:</h4>
                         <p style="margin: 0; color: #555; font-size: 15px;">
-                            {'A* utiliza heurísticas para reduzir o espaço de busca, resultando em' if astar_total_time < dijkstra_total_time else 'Dijkstra explora sistematicamente todos os caminhos, garantindo'}
-                            {'tempos de execução menores.' if astar_total_time < dijkstra_total_time else 'otimalidade com possível custo computacional maior.'}
+                            {'A* uses heuristics to reduce the search space, resulting in' if astar_total_time < dijkstra_total_time else 'Dijkstra systematically explores all paths, ensuring'}
+                            {'shorter execution times.' if astar_total_time < dijkstra_total_time else 'optimality with possible higher computational cost.'}
                         </p>
                     </div>
                     </div>
@@ -1297,9 +1297,9 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                 
                 <div class="chart-section" style="margin-top: 30px;">
                     <h3 style="margin: 0 0 20px 0; font-size: 20px; font-weight: 600; color: #333; text-align: center;">
-                        Comparação Visual de Performance: Tempo de Execução - Dijkstra vs A*
+                        Performance Visual Comparison: Execution Time - Dijkstra vs A*
                     </h3>
-                    <img src="{chart_execution_time}" alt="Gráfico Tempo de Execução" style="width: 100%; max-width: 1000px; display: block; margin: 0 auto; border-radius: 8px;">
+                    <img src="{chart_execution_time}" alt="Execution Time Chart" style="width: 100%; max-width: 1000px; display: block; margin: 0 auto; border-radius: 8px;">
                 </div>
             </div>
             </div>
