@@ -24,8 +24,8 @@ A Python-based route optimization system that compares ecological routes (fuel-e
 ### 1. Clone or Download the Repository
 
 ```bash
-git clone <repository-url>
-cd TrabFinalAEDS2
+git clone https://github.com/fernando-horita-siratuti/Eco-Routing.git
+cd Eco-Routing
 ```
 
 ### 2. Create Virtual Environment
