@@ -276,15 +276,16 @@ def nearest_node_to_point(G: nx.DiGraph, lat: float, lon: float) -> int:
     nearest_node = nodes[idx][0]
     return nearest_node
 
-def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10) -> Tuple[float, float, str]:
+def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5) -> Tuple[float, float, str]:
     """
     Faz geocoding de um endereço com retry e tratamento de erros melhorado.
     Inclui bairros conhecidos de Divinópolis para melhorar a precisão.
+    Otimizado para velocidade mantendo precisão.
     
     Args:
         address: Endereço a ser geocodificado
         user_agent: User agent para o Nominatim
-        timeout: Timeout em segundos
+        timeout: Timeout em segundos (reduzido para 5)
     
     Returns:
         Tuple (latitude, longitude, endereço encontrado)
@@ -303,22 +304,19 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
         "Jardim Copacabana", "Vila Rica", "São Luiz", "Vila Dom Bosco"
     ]
     
-    # Normaliza o endereço: remove espaços extras e vírgulas duplicadas
+    # Normaliza o endereço
     address_clean = ", ".join([part.strip() for part in address.split(",") if part.strip()])
     address_lower = address_clean.lower()
     
     # Extrai informações do endereço
-    # Melhora regex para capturar melhor nomes de ruas (especialmente "Goiás", "Pains")
     street_match = re.search(r'(rua|avenida|av\.?|r\.?)\s+([^,0-9]+?)(?:\s*,\s*|\s*$)', address_lower)
     if not street_match:
-        # Tenta sem prefixo, capturando nome antes do número
         street_match = re.search(r'^([^,0-9]+?)(?:\s*,\s*\d)', address_lower)
     
     number_match = re.search(r'(\d+)', address_clean)
     
     street_name = street_match.group(2).strip() if street_match else None
     if not street_name and street_match:
-        # Se não capturou grupo 2, tenta grupo 1
         street_name = street_match.group(1).strip() if street_match.lastindex >= 1 else None
     
     street_number = number_match.group(1) if number_match else None
@@ -337,51 +335,29 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
             mentioned_bairro = bairro
             break
     
-    # Constrói variações do endereço
+    # OTIMIZAÇÃO: Constrói apenas as variações mais importantes (prioridade)
     variations = []
     
-    # 1. Endereço original completo
+    # 1. Endereço original completo (MAIS IMPORTANTE - sempre primeiro)
     if "divinópolis" in address_lower or "divinopolis" in address_lower:
         variations.append(address_clean)
     
-    # 2. Se temos nome da rua e número, tenta com cada bairro
+    # 2. Se temos nome da rua e número, tenta apenas com 2-3 bairros mais prováveis
     if street_name and street_number:
         street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
         street_full = f"{street_prefix.title()} {street_name.title()}, {street_number}"
         
         if mentioned_bairro:
-            # Com o bairro mencionado
             variations.append(f"{street_full}, {mentioned_bairro}, Divinópolis, MG, Brasil")
         else:
-            # Verifica se há bairros conhecidos para esta rua
+            # OTIMIZAÇÃO: Apenas 2-3 bairros mais prováveis
             street_key = street_name.lower().strip()
-            preferred_bairros = street_to_bairro.get(street_key, ["Orion", "Centro", "Esplanada", "Niterói", "Candidés"])
-            
-            # Tenta com os bairros preferidos primeiro, depois os outros
-            for bairro in preferred_bairros:
-                variations.append(f"{street_full}, {bairro}, Divinópolis, MG, Brasil")
-            
-            # Adiciona outros bairros centrais também
-            for bairro in ["Centro", "Esplanada", "Niterói", "Candidés", "Vila Romana"]:
-                if bairro not in preferred_bairros:
-                    variations.append(f"{street_full}, {bairro}, Divinópolis, MG, Brasil")
-    
-    # 3. Sem número, apenas rua + bairros
-    if street_name and not street_number:
-        street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
-        street_full = f"{street_prefix.title()} {street_name.title()}"
-        
-        if mentioned_bairro:
-            variations.append(f"{street_full}, {mentioned_bairro}, Divinópolis, MG, Brasil")
-        else:
-            # Verifica se há bairros conhecidos para esta rua
-            street_key = street_name.lower().strip()
-            preferred_bairros = street_to_bairro.get(street_key, ["Orion", "Centro", "Esplanada", "Niterói"])
-            
-            for bairro in preferred_bairros:
+            preferred_bairros = street_to_bairro.get(street_key, ["Centro", "Esplanada", "Niterói"])
+            # Limita a 3 bairros
+            for bairro in preferred_bairros[:3]:
                 variations.append(f"{street_full}, {bairro}, Divinópolis, MG, Brasil")
     
-    # 4. Variações sem bairro
+    # 3. Variações sem bairro (apenas se não encontrou ainda)
     if street_name:
         street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
         street_full = f"{street_prefix.title()} {street_name.title()}"
@@ -389,13 +365,13 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
             variations.append(f"{street_full}, {street_number}, Divinópolis, MG, Brasil")
         variations.append(f"{street_full}, Divinópolis, MG, Brasil")
     
-    # 5. Fallback: endereço original + contexto
-    if not variations or address_clean not in variations:
-        variations.insert(0, address_clean)
+    # 4. Fallback mínimo
+    if not variations:
+        variations.append(address_clean)
         if "divinópolis" not in address_lower:
             variations.append(f"{address_clean}, Divinópolis, MG, Brasil")
     
-    # Remove duplicatas mantendo ordem
+    # Remove duplicatas
     seen = set()
     unique_variations = []
     for var in variations:
@@ -403,13 +379,16 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
             seen.add(var)
             unique_variations.append(var)
     
+    # OTIMIZAÇÃO: Limita a máximo 6 tentativas (prioriza as mais importantes)
+    max_attempts = min(6, len(unique_variations))
+    unique_variations = unique_variations[:max_attempts]
+    
     last_error = None
     best_result = None
     best_score = 0
     
     for i, addr_variant in enumerate(unique_variations):
         try:
-            # Remove viewbox e bounded que estavam causando erro
             loc = geolocator.geocode(
                 addr_variant,
                 timeout=timeout,
@@ -425,10 +404,8 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
                 # Pontuação baseada em correspondências
                 if street_name:
                     street_lower = street_name.lower().strip()
-                    # Verifica correspondência exata ou parcial
                     if street_lower in returned_address_lower:
                         score += 10
-                    # Verifica se o nome da rua aparece sem espaços (ex: "goias" vs "goiás")
                     elif street_lower.replace(" ", "") in returned_address_lower.replace(" ", ""):
                         score += 8
                 
@@ -437,7 +414,7 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
                 if "divinópolis" in returned_address_lower or "divinopolis" in returned_address_lower:
                     score += 5
                 
-                # Bonus se está no bairro correto para a rua
+                # Bonus se está no bairro correto
                 if street_name:
                     street_key = street_name.lower().strip()
                     preferred_bairros = street_to_bairro.get(street_key, [])
@@ -446,8 +423,8 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
                             score += 10
                             break
                 
-                # Se encontrou rua e número, é um bom resultado
-                if score >= 30:
+                # OTIMIZAÇÃO: Para imediatamente se encontrou resultado bom (reduzido de 30 para 25)
+                if score >= 25:
                     return loc.latitude, loc.longitude, loc.address
                 
                 # Mantém o melhor resultado
@@ -455,14 +432,25 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
                     best_score = score
                     best_result = (loc.latitude, loc.longitude, loc.address)
             
-            # Aguarda antes da próxima tentativa
+            # OTIMIZAÇÃO: Espera mínima entre tentativas (0.2s - Nominatim permite)
+            # E para mais cedo se já tem resultado razoável
             if i < len(unique_variations) - 1:
-                time.sleep(1)
+                # Se já tem resultado muito bom, para
+                if best_score >= 25:
+                    break
+                # Se já tem resultado razoável, espera menos
+                elif best_score >= 18:
+                    time.sleep(0.2)
+                else:
+                    time.sleep(0.3)  # Reduzido de 1s para 0.3s
                 
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             last_error = e
+            # Se já tem resultado razoável, não continua
+            if best_score >= 18:
+                break
             if i < len(unique_variations) - 1:
-                time.sleep(2)
+                time.sleep(1)  # Reduzido de 2s para 1s
     
     # Se encontrou algum resultado, retorna o melhor
     if best_result is not None:
