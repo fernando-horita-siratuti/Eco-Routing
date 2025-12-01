@@ -17,8 +17,9 @@ if __name__ == "__main__":
         gerar_csvs()
         print("Dados tratados com sucesso.")
 
-    start_addr = "Rua Padre Eustáquio, 710, Divinópolis, MG, Brasil"
-    dest_addr = "Álvares de Azevedo, 400, Divinópolis, MG, Brasil"
+    # Exemplo com bairro (opcional, mas mais preciso)
+    start_addr = "Rua Pains, 75, Centro, Divinópolis, MG, Brasil"
+    dest_addr = "Rua Padre Eustáquio, 716, Santa Rosa, Divinópolis, MG, Brasil"
   
     print("Renderizando rotas...")
     render_all_routes_combined(start_addr, dest_addr, output_html="rotas.html")

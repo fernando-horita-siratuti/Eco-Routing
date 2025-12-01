@@ -5,7 +5,7 @@ import pandas as pd
 import networkx as nx
 import numpy as np
 from geopy.geocoders import Nominatim
-from calculation.elevation import street_steepness, EARTH_RADIUS_M
+from calculation.elevation import street_steepness
 
 # ========== PARÂMETROS ==========
 BASE_L_PER_100KM = 10.0       # consumo base típico (L/100km) em velocidade moderada
@@ -52,12 +52,13 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     Returns:
         Distância em metros
     """
+    R = 6371000.0
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    return 2*EARTH_RADIUS_M*math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return 2*R*math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 def parse_maxspeed(val, default=REF_SPEED_KMH):
@@ -278,6 +279,7 @@ def nearest_node_to_point(G: nx.DiGraph, lat: float, lon: float) -> int:
 def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10) -> Tuple[float, float, str]:
     """
     Faz geocoding de um endereço com retry e tratamento de erros melhorado.
+    Inclui bairros conhecidos de Divinópolis para melhorar a precisão.
     
     Args:
         address: Endereço a ser geocodificado
@@ -289,33 +291,182 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 10
     """
     from geopy.exc import GeocoderTimedOut, GeocoderServiceError
     import time
+    import re
     
     geolocator = Nominatim(user_agent=user_agent, timeout=timeout)
     
-    # Tentativas com variações do endereço
-    variations = [
-        address,  # Tenta o endereço original primeiro
-        address.replace(",", ""),  # Remove vírgulas
-        address.split(",")[0] + ", Divinópolis, MG, Brasil",  # Só rua e cidade
-        address.split(",")[0] + ", Divinópolis, Brasil",  # Sem estado
+    # Bairros conhecidos de Divinópolis para melhorar a busca
+    bairros_divinopolis = [
+        "Centro", "Esplanada", "Niterói", "Candidés", "Vila Romana", 
+        "Jardim Belvedere", "Jardim Paraíso", "Santo Antônio", "Bela Vista",
+        "Morro da Pitimba", "Orion", "Itaí", "Danilo Passos", "Chácaras",
+        "Jardim Copacabana", "Vila Rica", "São Luiz", "Vila Dom Bosco"
     ]
     
+    # Normaliza o endereço: remove espaços extras e vírgulas duplicadas
+    address_clean = ", ".join([part.strip() for part in address.split(",") if part.strip()])
+    address_lower = address_clean.lower()
+    
+    # Extrai informações do endereço
+    # Melhora regex para capturar melhor nomes de ruas (especialmente "Goiás", "Pains")
+    street_match = re.search(r'(rua|avenida|av\.?|r\.?)\s+([^,0-9]+?)(?:\s*,\s*|\s*$)', address_lower)
+    if not street_match:
+        # Tenta sem prefixo, capturando nome antes do número
+        street_match = re.search(r'^([^,0-9]+?)(?:\s*,\s*\d)', address_lower)
+    
+    number_match = re.search(r'(\d+)', address_clean)
+    
+    street_name = street_match.group(2).strip() if street_match else None
+    if not street_name and street_match:
+        # Se não capturou grupo 2, tenta grupo 1
+        street_name = street_match.group(1).strip() if street_match.lastindex >= 1 else None
+    
+    street_number = number_match.group(1) if number_match else None
+    
+    # Mapeamento de ruas conhecidas para seus bairros mais prováveis
+    street_to_bairro = {
+        "goiás": ["Orion", "Centro", "Esplanada"],
+        "goias": ["Orion", "Centro", "Esplanada"],
+        "pains": ["Centro", "Esplanada", "Niterói"],
+    }
+    
+    # Verifica se já menciona algum bairro
+    mentioned_bairro = None
+    for bairro in bairros_divinopolis:
+        if bairro.lower() in address_lower:
+            mentioned_bairro = bairro
+            break
+    
+    # Constrói variações do endereço
+    variations = []
+    
+    # 1. Endereço original completo
+    if "divinópolis" in address_lower or "divinopolis" in address_lower:
+        variations.append(address_clean)
+    
+    # 2. Se temos nome da rua e número, tenta com cada bairro
+    if street_name and street_number:
+        street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
+        street_full = f"{street_prefix.title()} {street_name.title()}, {street_number}"
+        
+        if mentioned_bairro:
+            # Com o bairro mencionado
+            variations.append(f"{street_full}, {mentioned_bairro}, Divinópolis, MG, Brasil")
+        else:
+            # Verifica se há bairros conhecidos para esta rua
+            street_key = street_name.lower().strip()
+            preferred_bairros = street_to_bairro.get(street_key, ["Orion", "Centro", "Esplanada", "Niterói", "Candidés"])
+            
+            # Tenta com os bairros preferidos primeiro, depois os outros
+            for bairro in preferred_bairros:
+                variations.append(f"{street_full}, {bairro}, Divinópolis, MG, Brasil")
+            
+            # Adiciona outros bairros centrais também
+            for bairro in ["Centro", "Esplanada", "Niterói", "Candidés", "Vila Romana"]:
+                if bairro not in preferred_bairros:
+                    variations.append(f"{street_full}, {bairro}, Divinópolis, MG, Brasil")
+    
+    # 3. Sem número, apenas rua + bairros
+    if street_name and not street_number:
+        street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
+        street_full = f"{street_prefix.title()} {street_name.title()}"
+        
+        if mentioned_bairro:
+            variations.append(f"{street_full}, {mentioned_bairro}, Divinópolis, MG, Brasil")
+        else:
+            # Verifica se há bairros conhecidos para esta rua
+            street_key = street_name.lower().strip()
+            preferred_bairros = street_to_bairro.get(street_key, ["Orion", "Centro", "Esplanada", "Niterói"])
+            
+            for bairro in preferred_bairros:
+                variations.append(f"{street_full}, {bairro}, Divinópolis, MG, Brasil")
+    
+    # 4. Variações sem bairro
+    if street_name:
+        street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
+        street_full = f"{street_prefix.title()} {street_name.title()}"
+        if street_number:
+            variations.append(f"{street_full}, {street_number}, Divinópolis, MG, Brasil")
+        variations.append(f"{street_full}, Divinópolis, MG, Brasil")
+    
+    # 5. Fallback: endereço original + contexto
+    if not variations or address_clean not in variations:
+        variations.insert(0, address_clean)
+        if "divinópolis" not in address_lower:
+            variations.append(f"{address_clean}, Divinópolis, MG, Brasil")
+    
+    # Remove duplicatas mantendo ordem
+    seen = set()
+    unique_variations = []
+    for var in variations:
+        if var not in seen:
+            seen.add(var)
+            unique_variations.append(var)
+    
     last_error = None
-    for i, addr_variant in enumerate(variations):
+    best_result = None
+    best_score = 0
+    
+    for i, addr_variant in enumerate(unique_variations):
         try:
-            loc = geolocator.geocode(addr_variant, timeout=timeout)
+            # Remove viewbox e bounded que estavam causando erro
+            loc = geolocator.geocode(
+                addr_variant,
+                timeout=timeout,
+                addressdetails=True,
+                exactly_one=True
+            )
             
             if loc is not None:
-                return loc.latitude, loc.longitude, loc.address
+                # Valida o resultado
+                returned_address_lower = loc.address.lower()
+                score = 0
+                
+                # Pontuação baseada em correspondências
+                if street_name:
+                    street_lower = street_name.lower().strip()
+                    # Verifica correspondência exata ou parcial
+                    if street_lower in returned_address_lower:
+                        score += 10
+                    # Verifica se o nome da rua aparece sem espaços (ex: "goias" vs "goiás")
+                    elif street_lower.replace(" ", "") in returned_address_lower.replace(" ", ""):
+                        score += 8
+                
+                if street_number and street_number in returned_address_lower:
+                    score += 20
+                if "divinópolis" in returned_address_lower or "divinopolis" in returned_address_lower:
+                    score += 5
+                
+                # Bonus se está no bairro correto para a rua
+                if street_name:
+                    street_key = street_name.lower().strip()
+                    preferred_bairros = street_to_bairro.get(street_key, [])
+                    for bairro in preferred_bairros:
+                        if bairro.lower() in returned_address_lower:
+                            score += 10
+                            break
+                
+                # Se encontrou rua e número, é um bom resultado
+                if score >= 30:
+                    return loc.latitude, loc.longitude, loc.address
+                
+                # Mantém o melhor resultado
+                if score > best_score:
+                    best_score = score
+                    best_result = (loc.latitude, loc.longitude, loc.address)
             
-            # Aguarda um pouco antes da próxima tentativa
-            if i < len(variations) - 1:
+            # Aguarda antes da próxima tentativa
+            if i < len(unique_variations) - 1:
                 time.sleep(1)
                 
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             last_error = e
-            if i < len(variations) - 1:
-                time.sleep(2)  # Aguarda mais em caso de erro
+            if i < len(unique_variations) - 1:
+                time.sleep(2)
+    
+    # Se encontrou algum resultado, retorna o melhor
+    if best_result is not None:
+        return best_result
     
     # Se todas as tentativas falharam
     error_msg = f"Geocoding falhou para: {address}"
@@ -617,6 +768,27 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
     }
 
 
+def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
+    """
+    Calcula rotas e compara se solicitado.
+    
+    Args:
+        compare: Se True, compara rota ecológica vs rota mais curta
+        use_manual_dijkstra: Se True, usa implementação manual do Dijkstra para rota mais curta
+    """
+    G = build_graph_from_csv()
+    
+    start_address = "Rua Padre Eustáquio, 716, Divinópolis, MG, Brasil"
+    dest_address = "Rua Rio de Janeiro, 2220, Divinópolis, MG, Brasil"
+    
+    if compare:
+        results = compare_routes(G, start_address, dest_address)
+        return results
+    else:
+        result = route_ecological(G, start_address, dest_address)
+        
+        return result
+
 def calculate_route_dijkstra(start_addr: str, dest_addr: str):
     """
     Calcula rotas usando Dijkstra (mais curta e ecológica).
@@ -632,3 +804,4 @@ def calculate_route_dijkstra(start_addr: str, dest_addr: str):
     result_short = route_shortest_distance(G, start_addr, dest_addr)
     result_eco = route_ecological_manual_dijkstra(G, start_addr, dest_addr)
     return result_short, result_eco
+
