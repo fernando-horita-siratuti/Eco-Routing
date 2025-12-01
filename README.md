@@ -392,43 +392,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-<div align="center">
+### Fernando Horita Siratuti
+*Undergraduate - 4th Semester, Computer Engineering @ CEFET-MG*
 
-  <br><br>
+[![Gmail][gmail-badge]][gmail-autor2] [![Linkedin][linkedin-badge]][linkedin-autor2] [![GitHub][github-badge]][github-autor2] [![Instagram][instagram-badge]][instagram-autor2]
 
-     <i>Fernando Horita Siratuti - Undergraduate - 4th Semester, Computer Engineering @ CEFET-MG</i>
+### Hugo Henrique Marques
+*Undergraduate - 4th Semester, Computer Engineering @ CEFET-MG*
 
-  <br><br>
-
-  
-
-  [![Gmail][gmail-badge]][gmail-autor2]
-
-  [![Linkedin][linkedin-badge]][linkedin-autor2]
-
-  [![GitHub][github-badge]][github-autor2]
-
-  [![Instagram][instagram-badge]][instagram-autor2]
-
-  
-
-  <br><br>
-
-     <i>Hugo Henrique Marques - Undergraduate - 4th Semester, Computer Engineering @ CEFET-MG</i>
-
-  <br><br>
-
-  
-
-  [![Gmail][gmail-badge]][gmail-autor3]
-
-  [![Linkedin][linkedin-badge]][linkedin-autor3]
-
-  [![GitHub][github-badge]][github-autor3]
-
-  [![Instagram][instagram-badge]][instagram-autor3]
-
-</div>
+[![Gmail][gmail-badge]][gmail-autor3] [![Linkedin][linkedin-badge]][linkedin-autor3] [![GitHub][github-badge]][github-autor3] [![Instagram][instagram-badge]][instagram-autor3]
 
 [gmail-badge]: https://img.shields.io/badge/-Gmail-c14438?style=flat-square&logo=Gmail&logoColor=white
 
