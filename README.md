@@ -152,7 +152,7 @@ python main/main.py
 
 The generated HTML file contains:
 - Interactive maps showing ecological and shortest routes
-- Comparison charts for distance, fuel consumption, and travel time
+- Comparison charts for distance, fuel consumption and travel time
 - Performance comparison between Dijkstra and A* algorithms
 - Route statistics and metrics
 
@@ -286,7 +286,7 @@ TrabFinalAEDS2/
 
 ### Key Files Description
 
-- **`calculation/dijkstra.py`**: Core routing algorithms, graph building, and geocoding
+- **`calculation/dijkstra.py`**: Core routing algorithms, graph building and geocoding
 - **`calculation/a_star.py`**: A* algorithm implementation with heuristics
 - **`calculation/data_processing.py`**: Downloads OSM data and generates CSV files
 - **`calculation/elevation.py`**: Fetches and caches elevation data from Open-Elevation API
