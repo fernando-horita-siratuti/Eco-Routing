@@ -1,6 +1,6 @@
 # Ecological Route Optimization System
 
-A Python-based route optimization system that compares ecological routes (fuel-efficient) versus shortest distance routes using Dijkstra and A* algorithms. The system generates interactive maps and scientific charts comparing route metrics including distance, fuel consumption, and travel time.
+A Python-based route optimization system that compares ecological routes (fuel-efficient) versus shortest distance routes using Dijkstra and A* algorithms. The system generates interactive maps and scientific charts comparing route metrics including distance, fuel consumption and travel time.
 
 ## Features
 
