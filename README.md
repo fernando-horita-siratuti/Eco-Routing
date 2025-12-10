@@ -6,6 +6,18 @@
 
 A Python-based route optimization system that compares ecological routes (fuel-efficient) versus shortest distance routes using Dijkstra and A* algorithms. The system generates interactive maps and scientific charts comparing route metrics including distance, fuel consumption and travel time.
 
+<div align="center">
+
+![Maintained](https://img.shields.io/badge/Maintained-yes-green.svg)
+![Python](https://img.shields.io/badge/Python-3.9.6-blue.svg?logo=python&logoColor=white)
+![Made for](https://img.shields.io/badge/Made%20for-VSCode-blue.svg?logo=visual-studio-code&logoColor=white)
+![Contributions](https://img.shields.io/badge/contributions-welcome-green.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+![Route Optimization](https://img.shields.io/badge/Route%20Optimization-yes-green.svg)
+![Ecological](https://img.shields.io/badge/Ecological-yes-green.svg)
+
+</div>
+
 ---
 
 ## Table of Contents
