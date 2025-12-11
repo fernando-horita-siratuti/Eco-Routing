@@ -1,4 +1,5 @@
 import math
+import logging
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 import pandas as pd
@@ -6,6 +7,9 @@ import networkx as nx
 import numpy as np
 from geopy.geocoders import Nominatim
 from calculation.elevation import street_steepness
+
+# Configurar logger para este módulo
+logger = logging.getLogger(__name__)
 
 # TO ADAPT FOR ANOTHER CONTEXT: These parameters can be adjusted based on vehicle characteristics and local conditions
 BASE_L_PER_100KM = 10.0
@@ -61,7 +65,7 @@ def haversine(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
     return 2*R*math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
-def parse_maxspeed(val, default=REF_SPEED_KMH):
+def parse_maxspeed(val: object, default: float = REF_SPEED_KMH) -> float:
     """
     Parses the maxspeed value from a string or number.
     
@@ -140,7 +144,7 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
             G.add_edge(v, u, length=length, name=name, maxspeed_kmh=maxspeed, original=True)
 
     if edges_invalid > 0:
-        print(f"Warning: {edges_invalid} edges with invalid length were ignored during CSV reading.")
+        logger.warning(f"{edges_invalid} edges with invalid length were ignored during CSV reading.")
 
     _precompute_edge_costs(G)
     
@@ -170,11 +174,11 @@ def validate_graph_weights(G: nx.DiGraph, weight_attr: str = 'eco_cost') -> bool
             issues.append(f"Edge ({u}->{v}) has negative weight: {weight}")
     
     if issues:
-        print(f"\nERROR: {len(issues)} problems found in graph weights (attribute '{weight_attr}'):")
+        logger.error(f"ERROR: {len(issues)} problems found in graph weights (attribute '{weight_attr}'):")
         for issue in issues[:10]:  # Show only the first 10
-            print(f"  - {issue}")
+            logger.error(f"  - {issue}")
         if len(issues) > 10:
-            print(f"  ... and {len(issues) - 10} more problems")
+            logger.error(f"  ... and {len(issues) - 10} more problems")
         return False
     
     return True
@@ -216,7 +220,7 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
             grade = steep.get("grade")
             slope = grade if grade is not None and not (math.isnan(grade) or math.isinf(grade)) else 0.0
         except Exception as e:
-            print(f"Error calculating steepness for edge ({u}->{v}): {e}. Using slope=0.")
+            logger.warning(f"Error calculating steepness for edge ({u}->{v}): {e}. Using slope=0.")
             slope = 0.0
         
         uphill = max(slope, 0.0)
@@ -235,7 +239,7 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
         
         if math.isnan(eco_cost) or math.isinf(eco_cost) or eco_cost < 0:
             eco_cost = max(0.001, length * 0.00001)
-            print(f"Warning: Edge ({u}->{v}) had invalid cost. Corrected to {eco_cost:.6f}")
+            logger.warning(f"Warning: Edge ({u}->{v}) had invalid cost. Corrected to {eco_cost:.6f}")
 
         if math.isnan(fuel_liters) or math.isinf(fuel_liters) or fuel_liters < 0:
             fuel_liters = max(0.0, base_per_m * length)
@@ -249,7 +253,7 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
         data['slope'] = slope
     
     if edges_removed > 0:
-        print(f"Warning: {edges_removed} edges with invalid length were removed.")
+        logger.warning(f"Warning: {edges_removed} edges with invalid length were removed.")
 
 
 def nearest_node_to_point(G: nx.DiGraph, lat: float, lon: float) -> int:
@@ -451,10 +455,12 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
     if best_result is not None:
         return best_result
     
-    error_msg = f"Geocoding failed for: {address}"
+    error_msg = f"Geocoding failed for address: '{address}'. "
     if last_error:
-        error_msg += f" (last error: {last_error})"
+        error_msg += f"Last error: {last_error}. "
+    error_msg += "Please verify that the address is correct and includes neighborhood and city information."
     
+    logger.error(error_msg)
     raise ValueError(error_msg)
 
 
@@ -518,7 +524,9 @@ def route_ecological(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
     try:
         path = nx.shortest_path(G, source=start_node, target=end_node, weight='eco_cost', method='dijkstra')
     except nx.NetworkXNoPath:
-        raise RuntimeError("No path between selected nodes.")
+        error_msg = f"Could not find a path between selected nodes (origin: {start_node}, destination: {end_node}). Please verify that the addresses are connected in the street network."
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     execution_time = time_module.perf_counter() - start_time
 
     total_length = 0.0
@@ -567,6 +575,9 @@ def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'lengt
         start: Origin node
         target: Destination node
         weight: Edge attribute to use as weight ('length', 'eco_cost', etc.)
+    
+    Returns:
+        Tuple of (path, total_cost) where path is list of node IDs
     """
     import heapq
     
@@ -574,6 +585,7 @@ def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'lengt
     dist[start] = 0.0
     prev = {node: None for node in G.nodes()}
     visited = set()
+    nodes_visited_count = 0  # Track number of nodes visited
     
     pq = [(0.0, start)]
     
@@ -584,6 +596,7 @@ def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'lengt
             continue
             
         visited.add(u)
+        nodes_visited_count += 1
         
         if u == target:
             break
@@ -618,8 +631,14 @@ def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'lengt
     return path, dist[target]
 
 
-def _process_path(G: nx.DiGraph, path: List[int]) -> Dict:
-    """Processes a path and calculates statistics (distance, fuel, time)."""
+def _process_path(G: nx.DiGraph, path: List[int], nodes_visited: int = None) -> Dict:
+    """Processes a path and calculates statistics (distance, fuel, time).
+    
+    Args:
+        G: Graph
+        path: List of node IDs in the path
+        nodes_visited: Optional number of nodes visited during search (for performance metrics)
+    """
     total_length = 0.0
     total_fuel = 0.0
     total_time_min = 0.0
@@ -644,7 +663,7 @@ def _process_path(G: nx.DiGraph, path: List[int]) -> Dict:
     
     street_segments_compressed = compress_street_segments(street_segments)
     
-    return {
+    result = {
         'path_nodes': path,
         'edges': edges,
         'street_segments': street_segments_compressed,
@@ -652,6 +671,11 @@ def _process_path(G: nx.DiGraph, path: List[int]) -> Dict:
         'total_time_min': total_time_min,
         'total_fuel_liters': total_fuel
     }
+    
+    if nodes_visited is not None:
+        result['nodes_visited'] = nodes_visited
+    
+    return result
 
 
 def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_manual_dijkstra: bool = False) -> Dict:
@@ -662,7 +686,7 @@ def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_
         G: Graph
         start_addr: Origin address
         dest_addr: Destination address
-        use_manual_dijkstra: If True, uses manual Dijkstra implementation
+        use_manual_dijkstra: If True, uses manual Dijkstra implementation (includes performance metrics)
     """
     import time as time_module
     start_lat, start_lon, _ = geocode_address(start_addr)
@@ -672,16 +696,19 @@ def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_
     end_node = nearest_node_to_point(G, dest_lat, dest_lon)
     
     start_time = time_module.perf_counter()
+    nodes_visited = None
     try:
         if use_manual_dijkstra:
-            path, _ = dijkstra_manual(G, start_node, end_node, weight='length')
+            path, _, nodes_visited = dijkstra_manual_with_metrics(G, start_node, end_node, weight='length')
         else:
             path = nx.shortest_path(G, source=start_node, target=end_node, weight='length', method='dijkstra')
     except nx.NetworkXNoPath:
-        raise RuntimeError("No path between selected nodes.")
+        error_msg = f"Could not find a path between selected nodes (origin: {start_node}, destination: {end_node}). Please verify that the addresses are connected in the street network."
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     execution_time = time_module.perf_counter() - start_time
     
-    result = _process_path(G, path)
+    result = _process_path(G, path, nodes_visited=nodes_visited)
     result['start_node'] = start_node
     result['end_node'] = end_node
     result['execution_time_seconds'] = execution_time
@@ -689,9 +716,78 @@ def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_
     return result
 
 
+def dijkstra_manual_with_metrics(G: nx.DiGraph, start: int, target: int, weight: str = 'length') -> Tuple[List[int], float, int]:
+    """
+    Manual implementation of Dijkstra's algorithm with performance metrics.
+    Returns (path, total_cost, nodes_visited_count).
+    
+    Args:
+        G: Directed graph
+        start: Origin node
+        target: Destination node
+        weight: Edge attribute to use as weight ('length', 'eco_cost', etc.)
+    
+    Returns:
+        Tuple of (path, total_cost, nodes_visited_count)
+    """
+    import heapq
+    
+    dist = {node: float('inf') for node in G.nodes()}
+    dist[start] = 0.0
+    prev = {node: None for node in G.nodes()}
+    visited = set()
+    nodes_visited_count = 0
+    
+    pq = [(0.0, start)]
+    
+    while pq:
+        current_dist, u = heapq.heappop(pq)
+        
+        if u in visited:
+            continue
+            
+        visited.add(u)
+        nodes_visited_count += 1
+        
+        if u == target:
+            break
+        
+        for v in G.successors(u):
+            if v in visited:
+                continue
+                
+            edge_data = G[u][v]
+            edge_weight = edge_data.get(weight, float('inf'))
+            
+            if edge_weight < 0:
+                raise ValueError(f"Negative weight found: {weight}={edge_weight}")
+            
+            alt = current_dist + edge_weight
+            
+            if alt < dist[v]:
+                dist[v] = alt
+                prev[v] = u
+                heapq.heappush(pq, (alt, v))
+    
+    if dist[target] == float('inf'):
+        error_msg = f"Could not find a path from node {start} to node {target}. The nodes may not be connected in the graph."
+        logger.error(error_msg)
+        raise nx.NetworkXNoPath(error_msg)
+    
+    path = []
+    u = target
+    while u is not None:
+        path.append(u)
+        u = prev[u]
+    path.reverse()
+    
+    return path, dist[target], nodes_visited_count
+
+
 def route_ecological_manual_dijkstra(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
     """
     Calculates ecological route using manual Dijkstra implementation.
+    Includes performance metrics (nodes visited).
     """
     import time as time_module
     start_lat, start_lon, _ = geocode_address(start_addr)
@@ -702,12 +798,14 @@ def route_ecological_manual_dijkstra(G: nx.DiGraph, start_addr: str, dest_addr: 
     
     start_time = time_module.perf_counter()
     try:
-        path, _ = dijkstra_manual(G, start_node, end_node, weight='eco_cost')
+        path, _, nodes_visited = dijkstra_manual_with_metrics(G, start_node, end_node, weight='eco_cost')
     except nx.NetworkXNoPath:
-        raise RuntimeError("No path between selected nodes.")
+        error_msg = f"Could not find a path between selected nodes (origin: {start_node}, destination: {end_node}). Please verify that the addresses are connected in the street network."
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     execution_time = time_module.perf_counter() - start_time
     
-    result = _process_path(G, path)
+    result = _process_path(G, path, nodes_visited=nodes_visited)
     result['start_node'] = start_node
     result['end_node'] = end_node
     result['execution_time_seconds'] = execution_time
@@ -743,7 +841,7 @@ def compare_routes(G: nx.DiGraph, start_addr: str, dest_addr: str) -> Dict:
     }
 
 
-def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
+def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False) -> Dict:
     """
     Calculates routes and compares if requested.
     
@@ -764,7 +862,7 @@ def calculate_route(compare: bool = True, use_manual_dijkstra: bool = False):
         
         return result
 
-def calculate_route_dijkstra(start_addr: str, dest_addr: str):
+def calculate_route_dijkstra(start_addr: str, dest_addr: str) -> Tuple[Dict, Dict]:
     """
     Calculates routes using Dijkstra (shortest and ecological).
     
@@ -776,7 +874,7 @@ def calculate_route_dijkstra(start_addr: str, dest_addr: str):
         Tupla (result_short, result_eco) com os resultados das rotas
     """
     G = build_graph_from_csv()
-    result_short = route_shortest_distance(G, start_addr, dest_addr)
+    result_short = route_shortest_distance(G, start_addr, dest_addr, use_manual_dijkstra=True)
     result_eco = route_ecological_manual_dijkstra(G, start_addr, dest_addr)
     return result_short, result_eco
 

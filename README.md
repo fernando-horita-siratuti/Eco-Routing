@@ -29,6 +29,9 @@ A Python-based route optimization system that compares ecological routes (fuel-e
 - [Adapting for Another City](#adapting-for-another-city)
 - [Project Structure](#project-structure)
 - [Configurable Parameters](#configurable-parameters)
+- [Complexity Analysis](#complexity-analysis)
+- [Technical Details](#technical-details)
+- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [References](#references)
 - [License](#license)
@@ -350,6 +353,85 @@ TIME_WEIGHT = 0.5             # How many "equivalent liters" assigned to 1 extra
 - `SLOPE_COEF`: Increase for vehicles more sensitive to inclines
 - `REF_SPEED_KMH`: Set to typical city driving speed in your region
 - `TIME_WEIGHT`: Balance between fuel consumption and time savings
+
+## Complexity Analysis
+
+This project implements two pathfinding algorithms: **Dijkstra** and **A\***. Both algorithms have time complexity **O(E log V)** where E is the number of edges and V is the number of vertices. However, A* is more efficient in practice because it uses heuristics to guide the search toward the destination, exploring fewer nodes.
+
+### Key Points:
+
+- **Dijkstra**: Explores all nodes within a radius from the start point
+- **A\***: Uses admissible heuristics to focus search on optimal path, exploring ~30-50% fewer nodes
+- **Space Complexity**: Both algorithms use O(V) space
+- **Heuristics**: A* uses haversine distance (for shortest path) and ecological cost lower bounds (for eco route)
+
+For detailed complexity analysis, see [docs/ANALYSIS.md](docs/ANALYSIS.md).
+
+## Technical Details
+
+### Heuristics
+
+The A* algorithm uses **admissible heuristics** that never overestimate the actual cost:
+
+1. **Shortest Distance Heuristic**: Uses haversine (straight-line) distance
+   - Always ≤ actual path distance
+   - Guarantees optimality
+
+2. **Ecological Cost Heuristic**: Uses lower bounds for fuel and time
+   - Assumes ideal conditions (no slope, maximum speed)
+   - Never overestimates actual ecological cost
+
+### Cost Formula
+
+The ecological cost combines fuel consumption and time penalty:
+
+```
+eco_cost = fuel_liters + time_penalty_equiv_liters
+
+where:
+fuel_liters = base_per_m × length × slope_multiplier × speed_factor
+time_penalty = TIME_WEIGHT × time_minutes × liters_per_min_ref
+```
+
+### Inclination Calculation
+
+Street inclination is calculated using:
+
+```
+grade = dh / dist_horizontal
+inclination_deg = atan2(dh, dist_horizontal) × (180/π)
+```
+
+For comprehensive technical documentation, see [docs/TECHNICAL.md](docs/TECHNICAL.md).
+
+## Testing
+
+The project includes unit tests to validate algorithm correctness and heuristics admissibility.
+
+### Running Tests
+
+To run the test suite:
+
+```bash
+python -m pytest tests/
+```
+
+Or using unittest:
+
+```bash
+python -m unittest tests.test_algorithms
+```
+
+### Test Coverage
+
+The test suite includes:
+- **Haversine distance calculation**: Validates geographic distance computations
+- **Dijkstra manual implementation**: Tests pathfinding correctness
+- **A* heuristics**: Verifies admissibility (never overestimate)
+- **Street steepness**: Validates inclination calculations
+- **Algorithm consistency**: Ensures Dijkstra manual matches NetworkX results
+
+See `tests/test_algorithms.py` for complete test implementations.
 
 ## Troubleshooting
 

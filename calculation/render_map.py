@@ -1,4 +1,5 @@
 from pathlib import Path
+import logging
 import folium
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
@@ -12,21 +13,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 from io import BytesIO
 import base64
+from typing import Dict, Tuple, Optional, List
+import networkx as nx
 from .dijkstra import build_graph_from_csv, calculate_route_dijkstra
 from .a_star import calculate_astar_routes
 
+logger = logging.getLogger(__name__)
+
 def reverse_geocode(lat: float, lon: float, user_agent: str = "meu_app", timeout: int = 5) -> str:
     """
-    Faz reverse geocoding de coordenadas para obter endereço.
+    Performs reverse geocoding of coordinates to obtain an address.
     
     Args:
         lat: Latitude
         lon: Longitude
-        user_agent: User agent para o Nominatim
-        timeout: Timeout em segundos
+        user_agent: User agent for Nominatim
+        timeout: Timeout in seconds
     
     Returns:
-        Endereço encontrado ou coordenadas como fallback
+        Found address or coordinates as fallback
     """
     try:
         geolocator = Nominatim(user_agent=user_agent, timeout=timeout)
@@ -34,23 +39,23 @@ def reverse_geocode(lat: float, lon: float, user_agent: str = "meu_app", timeout
         if location and location.address:
             return location.address
     except (GeocoderTimedOut, GeocoderServiceError) as e:
-        print(f"Erro no reverse geocoding para ({lat}, {lon}): {e}")
+        logger.warning(f"Error in reverse geocoding for ({lat}, {lon}): {e}")
     except Exception as e:
-        print(f"Erro inesperado no reverse geocoding: {e}")
+        logger.error(f"Unexpected error in reverse geocoding: {e}")
     
     return f"Lat: {lat:.6f}, Lon: {lon:.6f}"
 
 
-def get_key_points(G, path_nodes):
+def get_key_points(G: nx.DiGraph, path_nodes: List[int]) -> List[Tuple[int, float, float]]:
     """
-    Seleciona apenas os pontos de início e fim da rota.
+    Selects only the start and end points of the route.
     
     Args:
-        G: Grafo
-        path_nodes: Lista de nós do caminho
+        G: Graph
+        path_nodes: List of nodes in the path
     
     Returns:
-        Lista de tuplas (node_id, lat, lon) com apenas início e fim
+        List of tuples (node_id, lat, lon) with only start and end points
     """
     if len(path_nodes) < 2:
         return [(path_nodes[0], float(G.nodes[path_nodes[0]]['y']), float(G.nodes[path_nodes[0]]['x']))]
@@ -61,7 +66,7 @@ def get_key_points(G, path_nodes):
     ]
 
 
-def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name: str, 
+def create_single_metric_chart(result_eco: Dict, result_short: Dict, metric_name: str, 
                                metric_label: str, unit: str, eco_value: float, short_value: float,
                                algorithm_name: str = "") -> str:
     """
@@ -127,7 +132,7 @@ def create_single_metric_chart(result_eco: dict, result_short: dict, metric_name
     return f"data:image/png;base64,{image_base64}"
 
 
-def create_route_comparison_charts(result_eco: dict, result_short: dict, algorithm_name: str = "") -> tuple:
+def create_route_comparison_charts(result_eco: Dict, result_short: Dict, algorithm_name: str = "") -> Tuple[str, str, str]:
     """
     Creates 3 separate comparative bar charts between Ecological Route and Shortest Route.
     
@@ -161,6 +166,73 @@ def create_route_comparison_charts(result_eco: dict, result_short: dict, algorit
     )
     
     return chart_distance, chart_fuel, chart_time
+
+
+def generate_statistical_summary(result_eco: Dict, result_short: Dict, 
+                                 dijkstra_time: Optional[float] = None, astar_time: Optional[float] = None) -> Dict:
+    """
+    Generates a comparative statistical summary between ecological and shortest routes.
+    
+    Args:
+        result_eco: Dictionary with ecological route data
+        result_short: Dictionary with shortest route data
+        dijkstra_time: Dijkstra execution time (optional)
+        astar_time: A* execution time (optional)
+    
+    Returns:
+        Dictionary with calculated statistics
+    """
+    length_eco = result_eco.get('total_length_m', 0)
+    length_short = result_short.get('total_length_m', 0)
+    fuel_eco = result_eco.get('total_fuel_liters', 0)
+    fuel_short = result_short.get('total_fuel_liters', 0)
+    time_eco = result_eco.get('total_time_min', 0)
+    time_short = result_short.get('total_time_min', 0)
+
+    length_diff = length_eco - length_short
+    fuel_diff = fuel_short - fuel_eco
+    time_diff = time_eco - time_short
+    
+    length_diff_pct = (length_diff / length_short * 100) if length_short > 0 else 0
+    fuel_diff_pct = (fuel_diff / fuel_short * 100) if fuel_short > 0 else 0
+    time_diff_pct = (time_diff / time_short * 100) if time_short > 0 else 0
+    
+    fuel_savings_liters = max(0, fuel_diff)
+    fuel_savings_pct = max(0, fuel_diff_pct)
+    
+    algorithm_comparison = {}
+    if dijkstra_time is not None and astar_time is not None:
+        speedup = dijkstra_time / astar_time if astar_time > 0 else 1.0
+        algorithm_comparison = {
+            'dijkstra_time': dijkstra_time,
+            'astar_time': astar_time,
+            'speedup': speedup,
+            'speedup_pct': (speedup - 1.0) * 100
+        }
+    
+    return {
+        'length': {
+            'eco': length_eco,
+            'short': length_short,
+            'diff': length_diff,
+            'diff_pct': length_diff_pct
+        },
+        'fuel': {
+            'eco': fuel_eco,
+            'short': fuel_short,
+            'diff': fuel_diff,
+            'diff_pct': fuel_diff_pct,
+            'savings_liters': fuel_savings_liters,
+            'savings_pct': fuel_savings_pct
+        },
+        'time': {
+            'eco': time_eco,
+            'short': time_short,
+            'diff': time_diff,
+            'diff_pct': time_diff_pct
+        },
+        'algorithms': algorithm_comparison
+    }
 
 
 def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit: str,
@@ -239,17 +311,17 @@ def create_algorithm_comparison_chart(metric_name: str, metric_label: str, unit:
 
 def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str = "rotas_comparacao.html", zoom_start: int = 14) -> Path:
     """
-    Renderiza ambas as rotas (ecológica e mais curta) em dois mapas na mesma página HTML.
-    Inclui título, tabela de comparação completa e endereços nos pins.
+    Renders both routes (ecological and shortest) in two maps on the same HTML page.
+    Includes title, complete comparison table and addresses on pins.
     
     Args:
-        start_addr: Endereço de origem
-        dest_addr: Endereço de destino
-        output_html: Nome do arquivo HTML de saída
-        zoom_start: Nível de zoom inicial do mapa
+        start_addr: Origin address
+        dest_addr: Destination address
+        output_html: Output HTML filename
+        zoom_start: Initial map zoom level
     
     Returns:
-        Path do arquivo HTML gerado
+        Path of the generated HTML file
     """
     result_short, result_eco = calculate_route_dijkstra(start_addr, dest_addr)
     
@@ -259,7 +331,9 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     coords_short = [(float(G.nodes[n]['y']), float(G.nodes[n]['x'])) for n in result_short['path_nodes']]
     
     if not coords_eco or not coords_short:
-        raise ValueError("One of the routes is empty, no coordinates to draw.")
+        error_msg = "One of the routes is empty, no coordinates to draw. Please verify that both addresses were geocoded correctly."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
     
     key_points_eco = get_key_points(G, result_eco['path_nodes'])
     key_points_short = get_key_points(G, result_short['path_nodes'])
@@ -420,6 +494,8 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
     fuel_diff_dijkstra = comp_dijkstra['fuel_diff_liters']
     length_diff_dijkstra = comp_dijkstra['length_diff_m']
     time_diff_dijkstra = abs(comp_dijkstra['time_diff_min'])
+    
+    stats = generate_statistical_summary(result_eco, result_short)
     
     chart_dijkstra_distance, chart_dijkstra_fuel, chart_dijkstra_time = create_route_comparison_charts(result_eco, result_short, "Dijkstra")
     
@@ -848,6 +924,48 @@ def render_both_routes_to_html(start_addr: str, dest_addr: str, output_html: str
             </div>
         </div>
         
+        <div class="statistics-section" style="background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); margin-bottom: 30px;">
+            <h2 style="margin-top: 0; color: #1976d2; font-size: 24px; font-weight: 600;">Statistical Summary</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; border-left: 4px solid #1976d2;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Distance Difference</h3>
+                    <p style="margin: 0; font-size: 28px; font-weight: 700; color: #333;">
+                        {stats['length']['diff']:+.1f}m
+                    </p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">
+                        ({stats['length']['diff_pct']:+.2f}%)
+                    </p>
+                </div>
+                <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; border-left: 4px solid #4caf50;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Fuel Savings</h3>
+                    <p style="margin: 0; font-size: 28px; font-weight: 700; color: #2e7d32;">
+                        {stats['fuel']['savings_liters']:.3f}L
+                    </p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">
+                        ({stats['fuel']['savings_pct']:.2f}% savings)
+                    </p>
+                </div>
+                <div style="background: #fff3e0; padding: 20px; border-radius: 12px; border-left: 4px solid #ff9800;">
+                    <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Time Difference</h3>
+                    <p style="margin: 0; font-size: 28px; font-weight: 700; color: #e65100;">
+                        {stats['time']['diff']:+.2f} min
+                    </p>
+                    <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">
+                        ({stats['time']['diff_pct']:+.2f}%)
+                    </p>
+                </div>
+            </div>
+            <div style="margin-top: 25px; padding: 20px; background: #f5f5f5; border-radius: 12px;">
+                <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #333;">Key Insights</h3>
+                <ul style="margin: 0; padding-left: 20px; color: #555; line-height: 1.8;">
+                    <li>The ecological route saves <strong>{stats['fuel']['savings_liters']:.3f} liters</strong> ({stats['fuel']['savings_pct']:.2f}%) compared to the shortest route</li>
+                    <li>Distance difference: <strong>{stats['length']['diff']:+.1f} meters</strong> ({stats['length']['diff_pct']:+.2f}%)</li>
+                    <li>Time difference: <strong>{stats['time']['diff']:+.2f} minutes</strong> ({stats['time']['diff_pct']:+.2f}%)</li>
+                    <li>Fuel efficiency: Ecological route consumes <strong>{stats['fuel']['eco']:.3f} L</strong> vs <strong>{stats['fuel']['short']:.3f} L</strong> for shortest route</li>
+                </ul>
+            </div>
+        </div>
+        
         <div class="analysis-section">
             <h2>Comparative Analysis: Advantages and Disadvantages</h2>
             <div class="analysis-content">
@@ -1026,6 +1144,9 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
     length_diff_astar = comp_astar['length_diff_m']
     time_diff_astar = abs(comp_astar['time_diff_min'])
     
+    # Generate statistical summary for A*
+    stats_astar = generate_statistical_summary(result_eco_astar, result_short_astar)
+    
     chart_astar_distance, chart_astar_fuel, chart_astar_time = create_route_comparison_charts(result_eco_astar, result_short_astar, "A*")
     
     chart_execution_time = create_algorithm_comparison_chart(
@@ -1119,6 +1240,49 @@ def render_all_routes_combined(start_addr: str, dest_addr: str, output_html: str
                                 <span>Shortest Route</span>
                             </div>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- STATISTICAL SUMMARY FOR A* -->
+                <div class="statistics-section" style="background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); margin-bottom: 30px;">
+                    <h2 style="margin-top: 0; color: #7b1fa2; font-size: 24px; font-weight: 600;">Statistical Summary (A*)</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
+                        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; border-left: 4px solid #7b1fa2;">
+                            <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Distance Difference</h3>
+                            <p style="margin: 0; font-size: 28px; font-weight: 700; color: #333;">
+                                {stats_astar['length']['diff']:+.1f}m
+                            </p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">
+                                ({stats_astar['length']['diff_pct']:+.2f}%)
+                            </p>
+                        </div>
+                        <div style="background: #e8f5e9; padding: 20px; border-radius: 12px; border-left: 4px solid #4caf50;">
+                            <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Fuel Savings</h3>
+                            <p style="margin: 0; font-size: 28px; font-weight: 700; color: #2e7d32;">
+                                {stats_astar['fuel']['savings_liters']:.3f}L
+                            </p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">
+                                ({stats_astar['fuel']['savings_pct']:.2f}% savings)
+                            </p>
+                        </div>
+                        <div style="background: #fff3e0; padding: 20px; border-radius: 12px; border-left: 4px solid #ff9800;">
+                            <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Time Difference</h3>
+                            <p style="margin: 0; font-size: 28px; font-weight: 700; color: #e65100;">
+                                {stats_astar['time']['diff']:+.2f} min
+                            </p>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; color: #666;">
+                                ({stats_astar['time']['diff_pct']:+.2f}%)
+                            </p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 25px; padding: 20px; background: #f5f5f5; border-radius: 12px;">
+                        <h3 style="margin: 0 0 15px 0; font-size: 18px; color: #333;">Key Insights</h3>
+                        <ul style="margin: 0; padding-left: 20px; color: #555; line-height: 1.8;">
+                            <li>The ecological route saves <strong>{stats_astar['fuel']['savings_liters']:.3f} liters</strong> ({stats_astar['fuel']['savings_pct']:.2f}%) compared to the shortest route</li>
+                            <li>Distance difference: <strong>{stats_astar['length']['diff']:+.1f} meters</strong> ({stats_astar['length']['diff_pct']:+.2f}%)</li>
+                            <li>Time difference: <strong>{stats_astar['time']['diff']:+.2f} minutes</strong> ({stats_astar['time']['diff_pct']:+.2f}%)</li>
+                            <li>Fuel efficiency: Ecological route consumes <strong>{stats_astar['fuel']['eco']:.3f} L</strong> vs <strong>{stats_astar['fuel']['short']:.3f} L</strong> for shortest route</li>
+                        </ul>
                     </div>
                 </div>
                 
