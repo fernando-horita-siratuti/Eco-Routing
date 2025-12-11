@@ -7,14 +7,12 @@ import numpy as np
 from geopy.geocoders import Nominatim
 from calculation.elevation import street_steepness
 
-# ========== PARAMETERS ==========
 # TO ADAPT FOR ANOTHER CONTEXT: These parameters can be adjusted based on vehicle characteristics and local conditions
-BASE_L_PER_100KM = 10.0       # typical base consumption (L/100km) at moderate speed
-SLOPE_COEF = 10.0             # how much uphill increases consumption (multiplier per unit of slope)
-SPEED_PENALTY_COEF = 0.2      # penalty for speeds outside reference (quadratic)
-REF_SPEED_KMH = 50.0          # reference speed for consumption (km/h)
-TIME_WEIGHT = 0.5             # how many "equivalent liters" we assign to 1 extra minute (multiplicative factor)
-# =========================================================
+BASE_L_PER_100KM = 10.0
+SLOPE_COEF = 10.0
+SPEED_PENALTY_COEF = 0.2
+REF_SPEED_KMH = 50.0
+TIME_WEIGHT = 0.5
 
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 # TO ADAPT FOR ANOTHER CITY: Change these CSV filenames to match your city
@@ -108,7 +106,6 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
 
     G = nx.DiGraph()
 
-    # Add nodes with lat/lon/elevation
     for _, r in nodes_df.iterrows():
         nid = int(r['node_id'])
         lat = _safe_float(r.get('latitude'), fallback=0.0)
@@ -117,7 +114,6 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
         elevation = _safe_float(elev_val, fallback=0.0)
         G.add_node(nid, y=lat, x=lon, elevation=elevation)
 
-    # Add edges
     edges_invalid = 0
     for _, r in edges_df.iterrows():
         try:
@@ -128,7 +124,6 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
         
         length = _safe_float(r.get('length'), fallback=0.0)
         
-        # Validation: ignore edges with invalid length from the start
         if length <= 0 or math.isnan(length) or math.isinf(length):
             edges_invalid += 1
             continue
@@ -137,7 +132,6 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
         maxspeed = parse_maxspeed(r.get('maxspeed', REF_SPEED_KMH), default=REF_SPEED_KMH)
         oneway = str(r.get('oneway', 'False')).lower() in ('true', '1', 't', 'yes')
 
-        # ignore edges whose nodes are missing
         if u not in G.nodes or v not in G.nodes:
             continue
 
@@ -150,7 +144,6 @@ def build_graph_from_csv(nodes_csv: Path = NODES_CSV, edges_csv: Path = EDGES_CS
 
     _precompute_edge_costs(G)
     
-    # Final graph validation
     validate_graph_weights(G, weight_attr='eco_cost')
     validate_graph_weights(G, weight_attr='length')
     
@@ -191,7 +184,7 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
     """Calculates fuel_liters, time_minutes and eco_cost for each edge in the graph.
        Uses street_steepness to obtain the grade (more robust than simple difference/length).
        Ensures that all costs are positive and valid."""
-    base_per_m = BASE_L_PER_100KM / 100000.0  # Liters per meter
+    base_per_m = BASE_L_PER_100KM / 100000.0
     ref_speed_kmh = REF_SPEED_KMH
     ref_speed_m_per_min = ref_speed_kmh * 1000.0 / 60.0
     liters_per_min_ref = base_per_m * ref_speed_m_per_min
@@ -200,7 +193,6 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
     for u, v, data in list(G.edges(data=True)):
         length = float(data.get('length', 1.0))
         
-        # Validation: remove edges with invalid length
         if length <= 0 or math.isnan(length) or math.isinf(length):
             G.remove_edge(u, v)
             edges_removed += 1
@@ -208,7 +200,6 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
         
         speed_kmh = float(data.get('maxspeed_kmh', REF_SPEED_KMH))
         
-        # Validation: speed must be positive
         if speed_kmh <= 0 or math.isnan(speed_kmh) or math.isinf(speed_kmh):
             speed_kmh = REF_SPEED_KMH
 
@@ -220,11 +211,9 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
         lon_v = float(G.nodes[v].get('x', 0.0))
         elev_v = float(G.nodes[v].get('elevation', 0.0))
 
-        # Use street_steepness to obtain grade (dh/dist_horizontal)
         try:
             steep = street_steepness(lat_u, lon_u, elev_u, lat_v, lon_v, elev_v)
             grade = steep.get("grade")
-            # If grade is None (dist_h == 0), set to 0
             slope = grade if grade is not None and not (math.isnan(grade) or math.isinf(grade)) else 0.0
         except Exception as e:
             print(f"Error calculating steepness for edge ({u}->{v}): {e}. Using slope=0.")
@@ -232,7 +221,6 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
         
         uphill = max(slope, 0.0)
 
-        # Factors
         slope_multiplier = 1.0 + (SLOPE_COEF * uphill)
         speed_factor = 1.0 + SPEED_PENALTY_COEF * ((speed_kmh - ref_speed_kmh) / ref_speed_kmh) ** 2
 
@@ -245,13 +233,10 @@ def _precompute_edge_costs(G: nx.DiGraph) -> None:
 
         eco_cost = fuel_liters + time_penalty_equiv_liters
         
-        # Critical validation: ensures all costs are positive and finite
         if math.isnan(eco_cost) or math.isinf(eco_cost) or eco_cost < 0:
-            # If cost is invalid, use a safe minimum value
-            eco_cost = max(0.001, length * 0.00001)  # Minimum cost based on length
+            eco_cost = max(0.001, length * 0.00001)
             print(f"Warning: Edge ({u}->{v}) had invalid cost. Corrected to {eco_cost:.6f}")
 
-        # Additional validation for fuel_liters and time_minutes
         if math.isnan(fuel_liters) or math.isinf(fuel_liters) or fuel_liters < 0:
             fuel_liters = max(0.0, base_per_m * length)
         
@@ -285,7 +270,7 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
     Optimized for speed while maintaining precision.
     
     NOTE: To adapt this for another city, modify:
-    - bairros_divinopolis: Replace with neighborhoods/districts of your target city
+    - neighborhoods_divinopolis: Replace with neighborhoods/districts of your target city
     - street_to_bairro: Update with streets that have multiple locations in your city
     - Replace "Divinópolis, MG, Brasil" with your city's location string
     - Adjust regex patterns if your language uses different street prefixes
@@ -306,19 +291,17 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
     
     # Known neighborhoods of Divinópolis to improve search accuracy
     # TO ADAPT FOR ANOTHER CITY: Replace this list with neighborhoods/districts of your target city
-    bairros_divinopolis = [
+    neighborhoods_divinopolis = [
         "Centro", "Esplanada", "Niterói", "Candidés", "Vila Romana", 
         "Jardim Belvedere", "Jardim Paraíso", "Santo Antônio", "Bela Vista",
         "Morro da Pitimba", "Orion", "Itaí", "Danilo Passos", "Chácaras",
         "Jardim Copacabana", "Vila Rica", "São Luiz", "Vila Dom Bosco",
-        "São Sebastião", "Santa Rosa"  # Added common neighborhoods that may have duplicate street names
+        "São Sebastião", "Santa Rosa"
     ]
     
-    # Normalize the address
     address_clean = ", ".join([part.strip() for part in address.split(",") if part.strip()])
     address_lower = address_clean.lower()
     
-    # Extract address information
     # TO ADAPT FOR ANOTHER LANGUAGE: Modify regex patterns to match your language's street prefixes
     street_match = re.search(r'(rua|avenida|av\.?|r\.?)\s+([^,0-9]+?)(?:\s*,\s*|\s*$)', address_lower)
     if not street_match:
@@ -332,57 +315,46 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
     
     street_number = number_match.group(1) if number_match else None
     
-    # Mapping of known streets to their most likely neighborhoods
-    # Useful for streets that have multiple locations in the same city
     # TO ADAPT FOR ANOTHER CITY: Update this dictionary with streets that have duplicates in your city
     street_to_bairro = {
         "goiás": ["Orion", "Centro", "Esplanada"],
         "goias": ["Orion", "Centro", "Esplanada"],
         "pains": ["Centro", "Esplanada", "Niterói"],
-        "bahia": ["Centro", "São Sebastião", "Esplanada"],  # Rua Bahia exists in Centro and São Sebastião
+        "bahia": ["Centro", "São Sebastião", "Esplanada"],
     }
     
-    # Check if address already mentions a neighborhood
     mentioned_bairro = None
     mentioned_bairro_lower = None
-    for bairro in bairros_divinopolis:
+    for bairro in neighborhoods_divinopolis:
         bairro_lower = bairro.lower()
         if bairro_lower in address_lower:
             mentioned_bairro = bairro
             mentioned_bairro_lower = bairro_lower
             break
     
-    # OPTIMIZATION: Build only the most important variations (priority)
     variations = []
     
-    # 1. MAXIMUM PRIORITY: If neighborhood mentioned, create variation with neighborhood FIRST
     # TO ADAPT FOR ANOTHER CITY: Replace "Divinópolis, MG, Brasil" with your city's location string
     if mentioned_bairro and street_name and street_number:
         street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
         street_full = f"{street_prefix.title()} {street_name.title()}, {street_number}"
         variations.append(f"{street_full}, {mentioned_bairro}, Divinópolis, MG, Brasil")
     
-    # 2. Complete original address (second priority)
     if "divinópolis" in address_lower or "divinopolis" in address_lower:
         variations.append(address_clean)
     
-    # 3. If we have street name and number, try only with 2-3 most likely neighborhoods
     if street_name and street_number:
         street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
         street_full = f"{street_prefix.title()} {street_name.title()}, {street_number}"
         
         if mentioned_bairro:
-            # If already added above, don't add again
             pass
         else:
-            # OPTIMIZATION: Only 2-3 most likely neighborhoods
             street_key = street_name.lower().strip()
             preferred_bairros = street_to_bairro.get(street_key, ["Centro", "Esplanada", "Niterói"])
-            # Limit to 3 neighborhoods
             for bairro in preferred_bairros[:3]:
                 variations.append(f"{street_full}, {bairro}, Divinópolis, MG, Brasil")
     
-    # 4. Variations without neighborhood (only if not found yet)
     if street_name:
         street_prefix = street_match.group(1) if street_match and street_match.lastindex >= 1 else "Rua"
         street_full = f"{street_prefix.title()} {street_name.title()}"
@@ -390,13 +362,11 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
             variations.append(f"{street_full}, {street_number}, Divinópolis, MG, Brasil")
         variations.append(f"{street_full}, Divinópolis, MG, Brasil")
     
-    # 5. Minimum fallback
     if not variations:
         variations.append(address_clean)
         if "divinópolis" not in address_lower:
             variations.append(f"{address_clean}, Divinópolis, MG, Brasil")
     
-    # Remove duplicates maintaining order (first occurrence)
     seen = set()
     unique_variations = []
     for var in variations:
@@ -404,7 +374,6 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
             seen.add(var)
             unique_variations.append(var)
     
-    # OPTIMIZATION: Limit to maximum 6 attempts (prioritizes the most important)
     max_attempts = min(6, len(unique_variations))
     unique_variations = unique_variations[:max_attempts]
     
@@ -422,11 +391,9 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
             )
             
             if loc is not None:
-                # Validate the result
                 returned_address_lower = loc.address.lower()
                 score = 0
                 
-                # Scoring based on matches
                 if street_name:
                     street_lower = street_name.lower().strip()
                     if street_lower in returned_address_lower:
@@ -439,24 +406,18 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
                 if "divinópolis" in returned_address_lower or "divinopolis" in returned_address_lower:
                     score += 5
                 
-                # CRITICAL: Check mentioned neighborhood vs returned neighborhood
-                # This solves the problem of duplicate streets
                 if mentioned_bairro_lower:
                     if mentioned_bairro_lower in returned_address_lower:
-                        # HIGH BONUS: Mentioned neighborhood matches returned one
-                        score += 25  # Very high bonus for exact match
+                        score += 25
                     else:
-                        # PENALTY: Returned neighborhood is different from mentioned one
-                        # Check if any other known neighborhood appears in the result
                         other_bairro_found = False
-                        for bairro in bairros_divinopolis:
+                        for bairro in neighborhoods_divinopolis:
                             if bairro.lower() != mentioned_bairro_lower and bairro.lower() in returned_address_lower:
                                 other_bairro_found = True
                                 break
                         if other_bairro_found:
-                            score -= 15  # Significant penalty for different neighborhood
+                            score -= 15
                 
-                # Bonus if in correct neighborhood (based on mapping)
                 if street_name:
                     street_key = street_name.lower().strip()
                     preferred_bairros = street_to_bairro.get(street_key, [])
@@ -465,22 +426,16 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
                             score += 10
                             break
                 
-                # OPTIMIZATION: Stop immediately if found very good result
-                # Increased to 30 to ensure neighborhood match is sufficient
                 if score >= 30:
                     return loc.latitude, loc.longitude, loc.address
                 
-                # Keep the best result
                 if score > best_score:
                     best_score = score
                     best_result = (loc.latitude, loc.longitude, loc.address)
             
-            # OPTIMIZATION: Minimum wait between attempts
             if i < len(unique_variations) - 1:
-                # If already has very good result, stop
                 if best_score >= 30:
                     break
-                # If already has reasonable result, wait less
                 elif best_score >= 20:
                     time.sleep(0.2)
                 else:
@@ -488,17 +443,14 @@ def geocode_address(address: str, user_agent: str = "meu_app", timeout: int = 5)
                 
         except (GeocoderTimedOut, GeocoderServiceError) as e:
             last_error = e
-            # If already has reasonable result, don't continue
             if best_score >= 20:
                 break
             if i < len(unique_variations) - 1:
                 time.sleep(1)
     
-    # If found any result, return the best one
     if best_result is not None:
         return best_result
     
-    # If all attempts failed
     error_msg = f"Geocoding failed for: {address}"
     if last_error:
         error_msg += f" (last error: {last_error})"
@@ -618,13 +570,11 @@ def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'lengt
     """
     import heapq
     
-    # Initialization
     dist = {node: float('inf') for node in G.nodes()}
     dist[start] = 0.0
     prev = {node: None for node in G.nodes()}
     visited = set()
     
-    # Priority queue: (distance, node)
     pq = [(0.0, start)]
     
     while pq:
@@ -635,11 +585,9 @@ def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'lengt
             
         visited.add(u)
         
-        # If we reached the destination, we can stop
         if u == target:
             break
         
-        # Explore neighbors
         for v in G.successors(u):
             if v in visited:
                 continue
@@ -657,7 +605,6 @@ def dijkstra_manual(G: nx.DiGraph, start: int, target: int, weight: str = 'lengt
                 prev[v] = u
                 heapq.heappush(pq, (alt, v))
     
-    # Reconstruct the path
     if dist[target] == float('inf'):
         raise nx.NetworkXNoPath(f"No path from {start} to {target}")
     
@@ -724,7 +671,6 @@ def route_shortest_distance(G: nx.DiGraph, start_addr: str, dest_addr: str, use_
     start_node = nearest_node_to_point(G, start_lat, start_lon)
     end_node = nearest_node_to_point(G, dest_lat, dest_lon)
     
-    # Measure algorithm execution time
     start_time = time_module.perf_counter()
     try:
         if use_manual_dijkstra:
@@ -754,7 +700,6 @@ def route_ecological_manual_dijkstra(G: nx.DiGraph, start_addr: str, dest_addr: 
     start_node = nearest_node_to_point(G, start_lat, start_lon)
     end_node = nearest_node_to_point(G, dest_lat, dest_lon)
     
-    # Measure algorithm execution time
     start_time = time_module.perf_counter()
     try:
         path, _ = dijkstra_manual(G, start_node, end_node, weight='eco_cost')

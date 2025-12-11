@@ -258,14 +258,11 @@ def street_steepness(lat1, lon1, h1, lat2, lon2, h2):
     """
     x, y, dist_h = horizontal_displacement_m(lat1, lon1, lat2, lon2)
     dh = h2 - h1
-    # 3D distance (hypotenuse)
     dist_3d = math.hypot(dist_h, dh)
 
-    # Inclination: use atan2(dh, dist_h) — correctly handles signs and dist_h == 0
-    inclination_rad = math.atan2(dh, dist_h)  # if dist_h == 0 and dh != 0 -> ±pi/2 (±90°)
+    inclination_rad = math.atan2(dh, dist_h)
     inclination_deg = math.fabs(math.degrees(inclination_rad))
 
-    # grade (ratio) and percentage: if dist_h == 0, becomes undefined (None)
     if dist_h == 0:
         grade = None
         inclination_percent = None

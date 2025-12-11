@@ -22,13 +22,11 @@ def _make_astar_heuristic_shortest(G: nx.DiGraph):
     This heuristic never overestimates (admissible) and therefore preserves A* optimality.
     """
     def heuristic(u: int, v: int) -> float:
-        # Get coordinates
         lat_u = float(G.nodes[u].get("y", 0.0))
         lon_u = float(G.nodes[u].get("x", 0.0))
         lat_v = float(G.nodes[v].get("y", 0.0))
         lon_v = float(G.nodes[v].get("x", 0.0))
         
-        # Straight-line distance (in meters) - this is the heuristic
         dist = haversine(lon_u, lat_u, lon_v, lat_v)
         
         return dist
@@ -57,7 +55,6 @@ def route_shortest_a_star_by_coords(
     
     heuristic = _make_astar_heuristic_shortest(G)
     
-    # Measure algorithm execution time
     start_time = time_module.perf_counter()
     try:
         path = nx.astar_path(G, start_node, end_node, heuristic=heuristic, weight="length")
@@ -128,9 +125,8 @@ def _make_astar_heuristic_eco(G: nx.DiGraph):
     """
     from calculation.dijkstra import BASE_L_PER_100KM, REF_SPEED_KMH, TIME_WEIGHT
     
-    base_per_m = BASE_L_PER_100KM / 100000.0  # liters per meter
+    base_per_m = BASE_L_PER_100KM / 100000.0
     
-    # compute (conservative) maximum speed observed in the graph
     max_speed_kmh = REF_SPEED_KMH
     for _, _, data in G.edges(data=True):
         try:
@@ -143,22 +139,18 @@ def _make_astar_heuristic_eco(G: nx.DiGraph):
     max_speed_kmh = max(max_speed_kmh, REF_SPEED_KMH)
     max_speed_m_per_min = max_speed_kmh * 1000.0 / 60.0
     
-    # liters-per-minute reference (same base as used in preprocessing)
     ref_speed_m_per_min = REF_SPEED_KMH * 1000.0 / 60.0
     liters_per_min_ref = (BASE_L_PER_100KM / 100000.0) * ref_speed_m_per_min
     
     def heuristic(u: int, v: int) -> float:
-        # straight-line distance (in meters)
         lat_u = float(G.nodes[u].get("y", 0.0))
         lon_u = float(G.nodes[u].get("x", 0.0))
         lat_v = float(G.nodes[v].get("y", 0.0))
         lon_v = float(G.nodes[v].get("x", 0.0))
         dist = haversine(lon_u, lat_u, lon_v, lat_v)
         
-        # fuel lower bound: assume no slope and no speed penalty
         fuel_lb = base_per_m * dist
         
-        # time lower bound: assume travel at max_speed_kmh
         time_min_lb = dist / max_speed_m_per_min if max_speed_m_per_min > 0 else 0.0
         time_penalty_lb = TIME_WEIGHT * time_min_lb * liters_per_min_ref
         
@@ -186,7 +178,6 @@ def route_ecological_a_star_by_coords(
     
     heuristic = _make_astar_heuristic_eco(G)
     
-    # Measure algorithm execution time
     start_time = time_module.perf_counter()
     try:
         path = nx.astar_path(G, start_node, end_node, heuristic=heuristic, weight="eco_cost")
@@ -247,16 +238,6 @@ def route_ecological_a_star_by_addresses(
 
 
 def calculate_astar_routes(start_addr: str, dest_addr: str):
-    """
-    Calcula rotas usando A* (ecológica e mais curta).
-    
-    Args:
-        start_addr: Endereço de origem
-        dest_addr: Endereço de destino
-    
-    Returns:
-        Tupla (result_eco, result_short) com os resultados das rotas
-    """
     G = build_graph_from_csv()
     result_eco = route_ecological_a_star_by_addresses(G, start_addr, dest_addr)
     result_short = route_shortest_a_star_by_addresses(G, start_addr, dest_addr)

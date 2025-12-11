@@ -229,7 +229,7 @@ edges_csv = OUTPUT_DIR / "yourcity_edges.csv"
 
 ```python
 # TO ADAPT FOR ANOTHER CITY: Replace this list with neighborhoods/districts of your target city
-bairros_divinopolis = [
+neighborhoods_divinopolis = [
     "Neighborhood1", "Neighborhood2", "Neighborhood3",
     # ... add all relevant neighborhoods for your city
 ]
@@ -356,7 +356,7 @@ TIME_WEIGHT = 0.5             # How many "equivalent liters" assigned to 1 extra
 ### Problem: Geocoding returns incorrect addresses
 
 **Solution:**
-1. Add the correct neighborhood to the `bairros_divinopolis` list in `geocode_address()`
+1. Add the correct neighborhood to the `neighborhoods_divinopolis` list in `geocode_address()`
 2. For streets with duplicate names, add them to `street_to_bairro` mapping
 3. Ensure addresses include neighborhood information when possible
 4. Check that the address format matches your city's conventions

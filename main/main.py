@@ -16,14 +16,14 @@ if __name__ == "__main__":
     else:
         print("Generating data...")
         # TO ADAPT FOR ANOTHER CITY: Change default place parameter in gerar_csvs() function
+        # Twice to improve precision of elevation data
         gerar_csvs()
-        print("Data processed successfully.")
+        gerar_csvs()
+        print("Data processed successfully. Cache warmed up.")
 
-    # Example with neighborhood (optional, but more precise)
     # TO ADAPT FOR ANOTHER CITY: Replace addresses with addresses from your target city
-    # Format: "Street Name, Number, Neighborhood, City, State, Country"
     start_addr = "Avenida Amazonas, 277, Centro, Divinópolis, MG, Brasil"
-    dest_addr = "Rua Bahia, 801, Centro, Divinópolis, MG, Brasil"
+    dest_addr = "Rua Padre Eustáquio, 716, Santa Rosa, Divinópolis, MG, Brasil"
   
     print("Rendering routes...")
     render_all_routes_combined(start_addr, dest_addr, output_html="rotas.html")
