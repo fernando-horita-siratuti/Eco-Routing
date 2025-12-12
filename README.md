@@ -20,6 +20,18 @@ A Python-based route optimization system that compares ecological routes (fuel-e
 
 ---
 
+## Scientific Paper
+
+This project constitutes the practical implementation of the research presented in the paper **"Eco-Routing in Urban Networks: A Comparative Study of A\* and Dijkstra on Ecology-Aware and Fastest Objectives"**.
+
+<div align="center">
+
+[![Read the Paper](https://img.shields.io/badge/Read%20the%20Paper-PDF-red?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](eco_routing.pdf)
+
+</div>
+
+---
+
 ## Table of Contents
 - [Features](#features)
 - [Requirements](#requirements)
