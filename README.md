@@ -13,7 +13,6 @@ A Python-based route optimization system that compares ecological routes (fuel-e
 ![Made for](https://img.shields.io/badge/Made%20for-VSCode-blue.svg?logo=visual-studio-code&logoColor=white)
 ![Contributions](https://img.shields.io/badge/contributions-welcome-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Route Optimization](https://img.shields.io/badge/Route%20Optimization-yes-green.svg)
 ![Ecological](https://img.shields.io/badge/Ecological-yes-green.svg)
 
 </div>
