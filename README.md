@@ -530,19 +530,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
      <i>Fernando Horita Siratuti - Undergraduate - 4th Semester, Computer Engineering @ CEFET-MG</i>
   <br><br>
   
-  [![Gmail][gmail-badge]][gmail-autor2]
-  [![Linkedin][linkedin-badge]][linkedin-autor2]
-  [![GitHub][github-badge]][github-autor2]
-  [![Instagram][instagram-badge]][instagram-autor2]
+  [![Gmail][gmail-badge]][gmail-autor1]
+  [![Linkedin][linkedin-badge]][linkedin-autor1]
+  [![GitHub][github-badge]][github-autor1]
+  [![Instagram][instagram-badge]][instagram-autor1]
   
   <br><br>
      <i>Hugo Henrique Marques - Undergraduate - 4th Semester, Computer Engineering @ CEFET-MG</i>
   <br><br>
   
-  [![Gmail][gmail-badge]][gmail-autor3]
-  [![Linkedin][linkedin-badge]][linkedin-autor3]
-  [![GitHub][github-badge]][github-autor3]
-  [![Instagram][instagram-badge]][instagram-autor3]
+  [![Gmail][gmail-badge]][gmail-autor2]
+  [![Linkedin][linkedin-badge]][linkedin-autor2]
+  [![GitHub][github-badge]][github-autor2]
+  [![Instagram][instagram-badge]][instagram-autor2]
 
 </div>
 
@@ -551,12 +551,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 [github-badge]: https://img.shields.io/badge/-GitHub-181717?style=flat-square&logo=github&logoColor=white
 [instagram-badge]: https://img.shields.io/badge/-Instagram-E4405F?style=flat-square&logo=instagram&logoColor=white
 
-[gmail-autor2]: mailto:siratutifernando@gmail.com
-[linkedin-autor2]: https://www.linkedin.com/in/fernando-siratuti-503ba8301/
-[github-autor2]: https://github.com/fernando-horita-siratuti
-[instagram-autor2]: https://www.instagram.com/siratuti_/
+[gmail-autor1]: mailto:siratutifernando@gmail.com
+[linkedin-autor1]: https://www.linkedin.com/in/fernando-siratuti-503ba8301/
+[github-autor1]: https://github.com/fernando-horita-siratuti
+[instagram-autor1]: https://www.instagram.com/siratuti_/
 
-[gmail-autor3]: mailto:hugohmarques4@gmail.com
-[linkedin-autor3]: https://www.linkedin.com/in/hugo-h-marques-980629216/
-[github-autor3]: https://github.com/hugnarok
-[instagram-autor3]: https://www.instagram.com/hugomarques_02/
+[gmail-autor2]: mailto:hugohmarques4@gmail.com
+[linkedin-autor2]: https://www.linkedin.com/in/hugo-h-marques-980629216/
+[github-autor2]: https://github.com/hugnarok
+[instagram-autor2]: https://www.instagram.com/hugomarques_02/
