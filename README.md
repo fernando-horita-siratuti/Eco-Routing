@@ -552,7 +552,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 [instagram-badge]: https://img.shields.io/badge/-Instagram-E4405F?style=flat-square&logo=instagram&logoColor=white
 
 [gmail-autor1]: mailto:siratutifernando@gmail.com
-[linkedin-autor1]: https://www.linkedin.com/in/fernando-siratuti-503ba8301/
+[linkedin-autor1]: https://www.linkedin.com/in/fernando-horita-siratuti/
 [github-autor1]: https://github.com/fernando-horita-siratuti
 [instagram-autor1]: https://www.instagram.com/siratuti_/
 
